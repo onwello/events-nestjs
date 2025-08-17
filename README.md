@@ -28,6 +28,153 @@ NestJS integration for [@logistically/events](https://github.com/onwello/events)
 - **Validation**: Comprehensive event validation with Zod schemas
 - **Monitoring**: Built-in statistics and metrics
 
+## 🔬 Advanced Features
+
+### Event Envelopes
+Events in the system are wrapped in structured envelopes that provide metadata and context:
+
+```typescript
+interface EventEnvelope<T = any> {
+  header: {
+    id: string;                    // Unique event identifier
+    type: string;                  // Event type (e.g., 'user.created')
+    service: string;               // Source service name
+    timestamp: number;             // Event creation timestamp
+    correlationId?: string;        // Request correlation ID
+    causationId?: string;          // Previous event ID that caused this
+    origin?: string;               // Geographic/organizational origin
+    version?: string;              // Event schema version
+  };
+  body: T;                        // Event payload data
+  metadata?: Record<string, any>;  // Additional metadata
+}
+```
+
+**Key Benefits:**
+- **Traceability**: Full event lineage with correlation and causation IDs
+- **Context Preservation**: Service origin, timestamps, and metadata
+- **Schema Evolution**: Version support for event structure changes
+- **Debugging**: Rich context for troubleshooting and monitoring
+
+### Stream Partitioning
+Horizontal scaling through event stream partitioning:
+
+```typescript
+// Enable partitioning in Redis transport
+new RedisStreamsPlugin().createTransport({
+  enablePartitioning: true,
+  partitionCount: 4,              // Number of partitions
+  partitionStrategy: 'hash',       // Partitioning strategy
+  partitionKey: 'userId'          // Field to use for partitioning
+})
+```
+
+**Partitioning Strategies:**
+- **Hash-based**: Consistent hashing for even distribution
+- **Round-robin**: Sequential distribution across partitions
+- **Key-based**: Partition by specific event field values
+
+**Benefits:**
+- **Scalability**: Distribute load across multiple consumers
+- **Ordering**: Maintain event order within partitions
+- **Performance**: Parallel processing of different partitions
+
+### Consumer Rebalancing
+Automatic consumer distribution and load balancing:
+
+```typescript
+// Consumer group configuration
+new RedisStreamsPlugin().createTransport({
+  groupId: 'user-service-group',
+  enableRebalancing: true,
+  rebalanceStrategy: 'range',      // Rebalancing strategy
+  maxConsumersPerPartition: 2,    // Max consumers per partition
+  rebalanceInterval: 30000        // Rebalancing check interval (ms)
+})
+```
+
+**Rebalancing Strategies:**
+- **Range**: Assign consecutive partitions to consumers
+- **Round-robin**: Distribute partitions evenly
+- **Sticky**: Minimize partition reassignments
+
+**Automatic Triggers:**
+- Consumer joins/leaves the group
+- Partition count changes
+- Consumer failures
+- Manual rebalancing requests
+
+### Dead Letter Queues (DLQ)
+Failed message handling and recovery:
+
+```typescript
+// Enable DLQ for failed message handling
+new RedisStreamsPlugin().createTransport({
+  enableDLQ: true,
+  dlqStreamPrefix: 'dlq:',        // DLQ stream prefix
+  maxRetries: 3,                  // Max retry attempts
+  dlqRetention: 86400000,         // DLQ message retention (ms)
+  poisonMessageHandler: async (message, error) => {
+    // Custom handling for permanently failed messages
+    console.error('Poison message:', message, error);
+    // Send to monitoring, alerting, etc.
+  }
+})
+```
+
+**DLQ Features:**
+- **Automatic Retry**: Configurable retry attempts with backoff
+- **Error Classification**: Different DLQ streams for different error types
+- **Recovery**: Manual message reprocessing from DLQ
+- **Monitoring**: Built-in metrics for failed message tracking
+
+### Event Compression
+**Note**: Compression support depends on the underlying transport implementation. Check the specific transport plugin documentation for available compression options.
+
+### Advanced Routing
+Basic pattern-based routing is supported through the core library:
+
+```typescript
+// Pattern-based event handling
+@EventHandler({ eventType: 'user.*' })
+async handleUserEvents(event: any): Promise<void> {
+  // Handle all user-related events
+}
+
+// Pattern-based subscription
+await eventConsumer.subscribePattern('user.*', handler);
+```
+
+**Available Routing Features:**
+- **Pattern Matching**: Basic wildcard pattern support (`user.*`, `*.created`)
+- **Event Type Filtering**: Route events by type patterns
+- **Service-based Routing**: Route by service origin
+
+### Monitoring & Observability
+Basic monitoring capabilities are available through the EventSystemService:
+
+```typescript
+// Get system status and health information
+const status = await eventSystemService.getStatus();
+console.log('System status:', status);
+
+// Check connection health
+const connected = eventSystemService.isConnected();
+console.log('Connected:', connected);
+
+// Get service information
+const serviceName = eventSystemService.getServiceName();
+const originPrefix = eventSystemService.getOriginPrefix();
+```
+
+**Available Monitoring:**
+- **System Status**: Overall system health and status
+- **Connection Status**: Transport connectivity
+- **Service Information**: Service name and origin configuration
+- **Basic Health Checks**: Connection availability
+
+**Note**: For advanced metrics, monitoring, and observability, consider integrating with your application's monitoring solution (Prometheus, DataDog, etc.) or extending the EventSystemService with custom metrics collection.
+
 ## 📦 Installation
 
 ```bash
@@ -386,6 +533,71 @@ See the `examples/` directory for complete working examples:
 
 - `user-service.example.ts` - Complete user service with events
 - `app.module.example.ts` - Module configuration examples
+
+## 🏭 Production Best Practices
+
+### Configuration Recommendations
+```typescript
+// Production-ready configuration
+EventsModule.forRoot({
+  service: process.env.SERVICE_NAME,
+  validationMode: 'strict',        // Strict validation in production
+  global: true,                    // Global module for app-wide access
+  
+  // High-availability Redis configuration
+  transports: new Map([
+    ['redis', new RedisStreamsPlugin().createTransport({
+      url: process.env.REDIS_URL,
+      groupId: `${process.env.SERVICE_NAME}-group`,
+      enableDLQ: true,             // Always enable DLQ in production
+      maxRetries: 3
+      // Note: Compression and partitioning depend on transport plugin support
+    })]
+  ]),
+  
+  // Publisher optimization
+  publisher: {
+    batching: {
+      enabled: true,
+      maxSize: 1000,
+      maxWaitMs: 100,
+      strategy: 'size'
+    },
+    retry: {
+      maxRetries: 3,
+      backoffStrategy: 'exponential',
+      baseDelay: 1000
+    }
+  },
+  
+  // Consumer optimization
+  consumer: {
+    enableConsumerGroups: true,
+    enablePatternRouting: true,
+    validationMode: 'strict'
+  }
+})
+```
+
+### Performance Tuning
+- **Batch Sizes**: Balance between latency (small batches) and throughput (large batches)
+- **Consumer Count**: Scale consumers based on expected load and processing requirements
+- **Memory Management**: Monitor memory usage and adjust batch sizes accordingly
+- **Transport Configuration**: Optimize transport-specific settings (Redis connection pooling, etc.)
+
+**Note**: Advanced features like partitioning depend on the specific transport plugin implementation. Check the transport plugin documentation for available scaling options.
+
+### Monitoring & Alerting
+- Set up alerts for high error rates (>1% failure rate)
+- Monitor consumer lag and alert if lag exceeds thresholds
+- Track throughput metrics and scale partitions when approaching limits
+- Set up health check endpoints for load balancer integration
+
+### Security Considerations
+- Use Redis ACLs to restrict access to event streams
+- Implement proper authentication for Redis connections
+- Consider encrypting sensitive event payloads
+- Use environment variables for all configuration secrets
 
 ## 🤝 Contributing
 
