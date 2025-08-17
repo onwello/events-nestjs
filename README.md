@@ -18,15 +18,20 @@ NestJS integration for [@logistically/events](https://github.com/onwello/events)
 
 ### Transport Support
 - **Redis Streams**: Production-ready Redis Streams transport with consumer groups
+- **Redis Cluster**: Full cluster mode support with automatic failover
+- **Redis Sentinel**: Sentinel mode for high availability
 - **Memory Transport**: Fast in-memory transport for testing and development
 - **Plugin System**: Extensible transport plugin system
 
 ### Enterprise Features
 - **Origin-Based Routing**: Regional isolation and namespace separation
-- **Batching**: Configurable message batching for high throughput
+- **Advanced Batching**: Configurable message batching with multiple strategies
 - **Retry Mechanisms**: Sophisticated retry strategies with backoff
 - **Validation**: Comprehensive event validation with Zod schemas
-- **Monitoring**: Built-in statistics and metrics
+- **Comprehensive Monitoring**: Built-in statistics, metrics, and health checks
+- **Message Ordering**: Global sequencing and causal dependency tracking
+- **Schema Management**: Event schema validation and evolution
+- **Message Replay**: Replay messages from specific points in time
 
 ## 🔬 Advanced Features
 
@@ -38,71 +43,206 @@ interface EventEnvelope<T = any> {
   header: {
     id: string;                    // Unique event identifier
     type: string;                  // Event type (e.g., 'user.created')
-    service: string;               // Source service name
-    timestamp: number;             // Event creation timestamp
-    correlationId?: string;        // Request correlation ID
-    causationId?: string;          // Previous event ID that caused this
-    origin?: string;               // Geographic/organizational origin
-    version?: string;              // Event schema version
+    origin: string;                // Source service/origin name
+    timestamp: string;             // Event creation timestamp (ISO string)
+    originPrefix?: string;         // Optional origin prefix (e.g., 'eu.de')
   };
   body: T;                        // Event payload data
-  metadata?: Record<string, any>;  // Additional metadata
+  nestjsMetadata?: {               // NestJS-specific metadata
+    correlationId?: string;        // Request correlation ID
+    causationId?: string;          // Previous event ID that caused this
+    [key: string]: any;           // Additional custom metadata
+  };
 }
 ```
 
 **Key Benefits:**
 - **Traceability**: Full event lineage with correlation and causation IDs
-- **Context Preservation**: Service origin, timestamps, and metadata
-- **Schema Evolution**: Version support for event structure changes
+- **Context Preservation**: Service origin, timestamps, and origin prefixes
+- **NestJS Integration**: Built-in metadata support for NestJS applications
 - **Debugging**: Rich context for troubleshooting and monitoring
 
+**Usage Example:**
+```typescript
+// Create event envelope
+const envelope = createEventEnvelope('user.created', 'user-service', userData, 'eu.de');
+
+// Access event properties
+console.log('Event ID:', envelope.header.id);
+console.log('Event Type:', envelope.header.type);
+console.log('Origin:', envelope.header.origin);
+console.log('Timestamp:', envelope.header.timestamp);
+console.log('Body:', envelope.body);
+console.log('Correlation ID:', envelope.nestjsMetadata?.correlationId);
+```
+
 ### Stream Partitioning
-Horizontal scaling through event stream partitioning:
+Advanced horizontal scaling through intelligent event stream partitioning:
 
 ```typescript
 // Enable partitioning in Redis transport
 new RedisStreamsPlugin().createTransport({
   enablePartitioning: true,
-  partitionCount: 4,              // Number of partitions
-  partitionStrategy: 'hash',       // Partitioning strategy
-  partitionKey: 'userId'          // Field to use for partitioning
+  partitionCount: 8,             // Number of partitions
+  partitioning: {
+    strategy: 'hash',             // Partitioning strategy
+    autoScaling: true,            // Auto-scale partitions based on load
+    partitionKeyExtractor: (msg) => msg.userId  // Custom key extraction
+  }
 })
 ```
 
 **Partitioning Strategies:**
-- **Hash-based**: Consistent hashing for even distribution
-- **Round-robin**: Sequential distribution across partitions
-- **Key-based**: Partition by specific event field values
+```typescript
+// Hash-based partitioning (default)
+strategy: 'hash'                  // Consistent hashing for even distribution
 
-**Benefits:**
-- **Scalability**: Distribute load across multiple consumers
-- **Ordering**: Maintain event order within partitions
-- **Performance**: Parallel processing of different partitions
+// Round-robin partitioning
+strategy: 'roundRobin'            // Sequential distribution across partitions
 
-### Consumer Rebalancing
-Automatic consumer distribution and load balancing:
+// Key-based partitioning
+strategy: 'keyBased'              // Partition by specific message properties
+
+// Dynamic load-based partitioning
+strategy: 'dynamic'               // Auto-balance based on partition load
+```
+
+**Publisher Partitioning:**
+```typescript
+// Specify partition for individual events
+await eventPublisher.publish('user.created', userData, {
+  partitionKey: 'userId',        // Field to use for partitioning
+  partition: 2                   // Specific partition number
+});
+```
+
+**Batching with Partitioning:**
+```typescript
+publisher: {
+  batching: {
+    strategy: 'partition',        // Use partition-based batching
+    maxSize: 1000,
+    maxWaitMs: 100
+  }
+}
+```
+
+**Available Features:**
+- **Multiple Strategies**: Hash, Round-robin, Key-based, Dynamic load-based
+- **Auto-scaling**: Automatic partition scaling based on load
+- **Partition Keys**: Route events to specific partitions based on data
+- **Partition Assignment**: Manually assign events to specific partitions
+- **Partition-based Batching**: Batch events by partition for ordering
+- **Load Balancing**: Dynamic load distribution across partitions
+- **Consumer Scaling**: Scale consumers based on partition count
+
+### Redis Cluster & High Availability
+Enterprise-grade Redis deployment support:
 
 ```typescript
-// Consumer group configuration
+// Redis Cluster mode
 new RedisStreamsPlugin().createTransport({
-  groupId: 'user-service-group',
-  enableRebalancing: true,
-  rebalanceStrategy: 'range',      // Rebalancing strategy
-  maxConsumersPerPartition: 2,    // Max consumers per partition
-  rebalanceInterval: 30000        // Rebalancing check interval (ms)
+  clusterNodes: [
+    { host: 'redis-cluster-1', port: 7000 },
+    { host: 'redis-cluster-2', port: 7000 },
+    { host: 'redis-cluster-3', port: 7000 }
+  ],
+  enableFailover: true,
+  failoverRecovery: {
+    enabled: true,
+    maxRetries: 3,
+    retryDelay: 1000
+  }
+})
+
+// Redis Sentinel mode
+new RedisStreamsPlugin().createTransport({
+  sentinels: [
+    { host: 'sentinel-1', port: 26379 },
+    { host: 'sentinel-2', port: 26379 },
+    { host: 'sentinel-3', port: 26379 }
+  ],
+  sentinelName: 'mymaster',
+  connectionTimeout: 5000,
+  commandTimeout: 3000
 })
 ```
 
-**Rebalancing Strategies:**
-- **Range**: Assign consecutive partitions to consumers
-- **Round-robin**: Distribute partitions evenly
-- **Sticky**: Minimize partition reassignments
+**Available Features:**
+- **Cluster Mode**: Full Redis cluster support with automatic sharding
+- **Sentinel Mode**: High availability with automatic failover
+- **Failover Recovery**: Automatic failover handling and recovery
+- **Connection Management**: Connection pooling, timeouts, and retry logic
+- **Load Balancing**: Automatic load distribution across cluster nodes
 
-**Automatic Triggers:**
-- Consumer joins/leaves the group
-- Partition count changes
-- Consumer failures
-- Manual rebalancing requests
+### Consumer Rebalancing
+Advanced consumer distribution and load balancing:
+
+```typescript
+// Consumer group configuration with advanced features
+new RedisStreamsPlugin().createTransport({
+  groupId: 'user-service-group',
+  consumerId: 'consumer-1',
+  enableConsumerGroups: true,
+  consumerGroupOptions: {
+    maxConsumersPerPartition: 2,
+    rebalanceStrategy: 'range',
+    rebalanceInterval: 30000
+  }
+})
+```
+
+**Rebalancing Features:**
+- **Consumer Groups**: Full Redis Streams consumer group support
+- **Automatic Distribution**: Intelligent partition assignment to consumers
+- **Failover**: Automatic failover when consumers go down
+- **Load Balancing**: Dynamic consumer load distribution
+- **Health Monitoring**: Consumer health and performance tracking
+
+### Schema Management & Validation
+Advanced event schema management and validation:
+
+```typescript
+// Enable schema management
+new RedisStreamsPlugin().createTransport({
+  schema: {
+    enabled: true,
+    validationMode: 'strict',
+    schemaRegistry: 'redis://localhost:6379',
+    enableSchemaEvolution: true,
+    versioning: 'semantic'
+  }
+})
+```
+
+**Schema Features:**
+- **Schema Registry**: Centralized schema storage and management
+- **Schema Validation**: Runtime event validation against schemas
+- **Schema Evolution**: Backward-compatible schema changes
+- **Versioning**: Semantic versioning for schemas
+- **Type Safety**: Runtime type checking and validation
+
+### Message Replay & Recovery
+Advanced message replay and recovery capabilities:
+
+```typescript
+// Enable message replay
+new RedisStreamsPlugin().createTransport({
+  replay: {
+    enabled: true,
+    maxReplaySize: 10000,
+    enableSelectiveReplay: true,
+    replayStrategies: ['from-timestamp', 'from-sequence', 'from-checkpoint']
+  }
+})
+```
+
+**Replay Features:**
+- **Selective Replay**: Replay messages from specific points
+- **Multiple Strategies**: Timestamp, sequence, or checkpoint-based replay
+- **Bulk Replay**: Efficient bulk message replay
+- **Recovery**: Disaster recovery and message restoration
+- **Audit Trail**: Complete message history and audit
 
 ### Dead Letter Queues (DLQ)
 Failed message handling and recovery:
@@ -113,7 +253,13 @@ new RedisStreamsPlugin().createTransport({
   enableDLQ: true,
   dlqStreamPrefix: 'dlq:',        // DLQ stream prefix
   maxRetries: 3,                  // Max retry attempts
+  retryDelay: 1000,               // Retry delay between attempts
+  maxRetriesBeforeDLQ: 3,         // Max retries before moving to DLQ
   dlqRetention: 86400000,         // DLQ message retention (ms)
+  dlqClassification: {
+    enabled: true,
+    errorTypes: ['validation', 'processing', 'timeout']
+  },
   poisonMessageHandler: async (message, error) => {
     // Custom handling for permanently failed messages
     console.error('Poison message:', message, error);
@@ -127,12 +273,34 @@ new RedisStreamsPlugin().createTransport({
 - **Error Classification**: Different DLQ streams for different error types
 - **Recovery**: Manual message reprocessing from DLQ
 - **Monitoring**: Built-in metrics for failed message tracking
+- **Error Categorization**: Automatic error type classification
+- **Retention Policies**: Configurable DLQ message retention
 
-### Event Compression
-**Note**: Compression support depends on the underlying transport implementation. Check the specific transport plugin documentation for available compression options.
+
+
+### Message Ordering & Causal Dependencies
+Advanced message ordering and causality tracking:
+
+```typescript
+// Enable message ordering
+new RedisStreamsPlugin().createTransport({
+  ordering: {
+    enabled: true,
+    strategy: 'partition',        // Order within partitions
+    enableCausalDependencies: true
+  }
+})
+```
+
+**Ordering Features:**
+- **Global Sequencing**: Atomic sequence number generation
+- **Partition Ordering**: Maintain order within partitions
+- **Causal Dependencies**: Track message causality and dependencies
+- **Processing Locks**: Ensure ordered message processing
+- **Sequence Management**: Automatic sequence number management
 
 ### Advanced Routing
-Basic pattern-based routing is supported through the core library:
+Sophisticated event routing and filtering:
 
 ```typescript
 // Pattern-based event handling
@@ -143,37 +311,61 @@ async handleUserEvents(event: any): Promise<void> {
 
 // Pattern-based subscription
 await eventConsumer.subscribePattern('user.*', handler);
+
+// Content-based routing with conditions
+@EventHandler({
+  eventType: 'user.created',
+  routing: {
+    condition: (event) => event.body.region === 'EU',
+    target: 'eu-processor'
+  }
+})
 ```
 
 **Available Routing Features:**
-- **Pattern Matching**: Basic wildcard pattern support (`user.*`, `*.created`)
+- **Pattern Matching**: Advanced wildcard pattern support (`user.*`, `*.created`)
 - **Event Type Filtering**: Route events by type patterns
 - **Service-based Routing**: Route by service origin
+- **Content-based Routing**: Route based on message content
+- **Conditional Routing**: Dynamic routing based on event properties
 
 ### Monitoring & Observability
-Basic monitoring capabilities are available through the EventSystemService:
+Comprehensive metrics and monitoring capabilities:
 
 ```typescript
-// Get system status and health information
-const status = await eventSystemService.getStatus();
-console.log('System status:', status);
+// Get comprehensive metrics from services
+const publisherStats = await eventPublisherService.getStats();
+const consumerStats = await eventConsumerService.getStats();
+const systemStatus = await eventSystemService.getStatus();
 
-// Check connection health
-const connected = eventSystemService.isConnected();
-console.log('Connected:', connected);
-
-// Get service information
-const serviceName = eventSystemService.getServiceName();
-const originPrefix = eventSystemService.getOriginPrefix();
+// Access detailed metrics
+console.log('Published messages:', publisherStats?.messagesPublished);
+console.log('Received messages:', consumerStats?.messagesReceived);
+console.log('Error rate:', publisherStats?.errorRate);
+console.log('Throughput:', publisherStats?.throughput);
+console.log('Memory usage:', publisherStats?.memoryUsage);
+console.log('CPU usage:', publisherStats?.cpuUsage);
 ```
 
-**Available Monitoring:**
-- **System Status**: Overall system health and status
-- **Connection Status**: Transport connectivity
-- **Service Information**: Service name and origin configuration
-- **Basic Health Checks**: Connection availability
+**Available Metrics:**
+- **Performance Metrics**: Publish/receive latency, throughput, error rates
+- **System Metrics**: Memory usage, CPU usage, uptime, connection status
+- **Partition Metrics**: Partition health, load, and performance
+- **Consumer Metrics**: Processing time, failure rates, retry counts
+- **Transport Metrics**: Connection health, failover events, cluster status
 
-**Note**: For advanced metrics, monitoring, and observability, consider integrating with your application's monitoring solution (Prometheus, DataDog, etc.) or extending the EventSystemService with custom metrics collection.
+**Health Checks:**
+- **System Health**: Overall system health and status
+- **Transport Health**: Transport connectivity and performance
+- **Partition Health**: Partition availability and load
+- **Consumer Health**: Consumer group health and lag
+- **Cluster Health**: Redis cluster/sentinel health status
+
+**Enterprise Monitoring:**
+- **Real-time Metrics**: Live performance and health monitoring
+- **Historical Data**: Metrics retention and trend analysis
+- **Alerting**: Configurable alerts for performance thresholds
+- **Integration**: Prometheus, DataDog, and other monitoring systems
 
 ## 📦 Installation
 
@@ -314,7 +506,7 @@ import { RedisStreamsPlugin } from '@logistically/events';
           maxSize: 1000,
           maxWaitMs: 100,
           maxConcurrentBatches: 5,
-          strategy: 'size'
+          strategy: 'size'          // Options: 'size', 'time', 'partition'
         },
         retry: {
           maxRetries: 3,
@@ -511,6 +703,18 @@ EVENTS_CONSUMER_GROUPS=true
 REDIS_GROUP_ID=nestjs-group
 REDIS_BATCH_SIZE=100
 REDIS_ENABLE_DLQ=true
+REDIS_ENABLE_PARTITIONING=true
+REDIS_PARTITION_COUNT=8
+
+# Redis Advanced Features
+REDIS_ENABLE_ORDERING=true
+REDIS_ENABLE_SCHEMA_MANAGEMENT=true
+REDIS_ENABLE_MESSAGE_REPLAY=true
+REDIS_ENABLE_CLUSTER_MODE=false
+REDIS_ENABLE_SENTINEL_MODE=false
+REDIS_CLUSTER_NODES=redis-cluster-1:7000,redis-cluster-2:7000,redis-cluster-3:7000
+REDIS_SENTINEL_NODES=sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+REDIS_SENTINEL_NAME=mymaster
 ```
 
 ### Using Environment Variables
@@ -536,6 +740,42 @@ See the `examples/` directory for complete working examples:
 
 ## 🏭 Production Best Practices
 
+### High Availability Configuration
+```typescript
+// Redis Cluster configuration for high availability
+EventsModule.forRoot({
+  service: process.env.SERVICE_NAME,
+  transports: new Map([
+    ['redis', new RedisStreamsPlugin().createTransport({
+      // Cluster mode
+      clusterNodes: process.env.REDIS_CLUSTER_NODES?.split(',').map(node => {
+        const [host, port] = node.split(':');
+        return { host, port: parseInt(port) };
+      }),
+      enableFailover: true,
+      failoverRecovery: {
+        enabled: true,
+        maxRetries: 3,
+        retryDelay: 1000
+      },
+      
+      // Or Sentinel mode
+      // sentinels: process.env.REDIS_SENTINEL_NODES?.split(',').map(node => {
+      //   const [host, port] = node.split(':');
+      //   return { host, port: parseInt(port) };
+      // }),
+      // sentinelName: process.env.REDIS_SENTINEL_NAME || 'mymaster',
+      
+      // Common settings
+      groupId: `${process.env.SERVICE_NAME}-group`,
+      enableDLQ: true,
+      enablePartitioning: true,
+      partitionCount: 8
+    })]
+  ])
+})
+```
+
 ### Configuration Recommendations
 ```typescript
 // Production-ready configuration
@@ -550,8 +790,29 @@ EventsModule.forRoot({
       url: process.env.REDIS_URL,
       groupId: `${process.env.SERVICE_NAME}-group`,
       enableDLQ: true,             // Always enable DLQ in production
-      maxRetries: 3
-      // Note: Compression and partitioning depend on transport plugin support
+      enablePartitioning: true,    // Enable partitioning for scalability
+      partitionCount: 8,           // Adjust based on expected load
+      maxRetries: 3,
+      
+      // Advanced features for production
+      ordering: {
+        enabled: true,
+        strategy: 'partition',      // Maintain order within partitions
+        enableCausalDependencies: true
+      },
+      partitioning: {
+        strategy: 'hash',           // Consistent hashing for even distribution
+        autoScaling: true          // Auto-scale based on load
+      },
+      schema: {
+        enabled: true,
+        validationMode: 'strict',
+        enableSchemaEvolution: true
+      },
+      replay: {
+        enabled: true,
+        maxReplaySize: 10000
+      }
     })]
   ]),
   
@@ -561,7 +822,7 @@ EventsModule.forRoot({
       enabled: true,
       maxSize: 1000,
       maxWaitMs: 100,
-      strategy: 'size'
+      strategy: 'size'              // Options: 'size', 'time', 'partition'
     },
     retry: {
       maxRetries: 3,
@@ -580,12 +841,25 @@ EventsModule.forRoot({
 ```
 
 ### Performance Tuning
-- **Batch Sizes**: Balance between latency (small batches) and throughput (large batches)
-- **Consumer Count**: Scale consumers based on expected load and processing requirements
-- **Memory Management**: Monitor memory usage and adjust batch sizes accordingly
-- **Transport Configuration**: Optimize transport-specific settings (Redis connection pooling, etc.)
+Advanced performance optimization strategies:
 
-**Note**: Advanced features like partitioning depend on the specific transport plugin implementation. Check the transport plugin documentation for available scaling options.
+- **Batching Strategies**: Choose between size, time, or partition-based batching
+- **Partitioning**: Use hash-based, round-robin, or dynamic load-based partitioning
+- **Consumer Scaling**: Scale consumers based on partition count and load
+- **Memory Management**: Monitor memory usage and adjust batch sizes accordingly
+- **Redis Optimization**: Enable pipelining, connection pooling, and failover handling
+
+**Partitioning Strategies:**
+- **Hash-based**: Consistent hashing for even distribution (recommended)
+- **Round-robin**: Sequential distribution across partitions
+- **Dynamic**: Auto-balance based on partition load
+- **Key-based**: Partition by specific message properties
+
+**Redis Performance:**
+- **Pipelining**: Enable for batch operations
+- **Connection Pooling**: Optimize connection management
+- **Failover**: Automatic failover and recovery
+- **Cluster Sharding**: Distribute load across cluster nodes
 
 ### Monitoring & Alerting
 - Set up alerts for high error rates (>1% failure rate)
