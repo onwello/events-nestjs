@@ -9,16 +9,9 @@ import { ConfigFactory } from '../utils/config.factory';
 @Global()
 @Module({
   imports: [DiscoveryModule],
-  providers: [
-    EventSystemService,
-    EventPublisherService,
-    EventConsumerService,
-  ],
-  exports: [
-    EventSystemService,
-    EventPublisherService,
-    EventConsumerService,
-  ],
+  // Remove base providers to avoid conflicts with dynamic modules
+  providers: [],
+  exports: [],
 })
 export class EventsModule {
   static forRoot(options: Partial<NestJSEventsModuleOptions> = {}): DynamicModule {

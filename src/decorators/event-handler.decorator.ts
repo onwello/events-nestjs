@@ -10,8 +10,8 @@ export function EventHandler(options: NestJSEventHandlerOptions): MethodDecorato
       handler: target.constructor.name,
       method: propertyKey.toString(),
       target: target.constructor,
-      priority: options.priority || 0,
-      async: options.async || false,
+      priority: options.priority ?? 0,
+      async: options.async,
       retry: options.retry,
       metadata: options.metadata,
     };
@@ -22,5 +22,18 @@ export function EventHandler(options: NestJSEventHandlerOptions): MethodDecorato
 }
 
 export function getEventHandlerMetadata(target: any, propertyKey: string | symbol): NestJSEventHandlerOptions | undefined {
-  return Reflect.getMetadata(EVENT_HANDLER_METADATA, target, propertyKey);
+  // Try to get metadata from the instance first
+  let metadata = Reflect.getMetadata(EVENT_HANDLER_METADATA, target, propertyKey);
+  
+  // If not found on instance, try the prototype
+  if (!metadata) {
+    metadata = Reflect.getMetadata(EVENT_HANDLER_METADATA, target.constructor.prototype, propertyKey);
+  }
+  
+  // If still not found, try the class itself
+  if (!metadata) {
+    metadata = Reflect.getMetadata(EVENT_HANDLER_METADATA, target.constructor, propertyKey);
+  }
+  
+  return metadata;
 }

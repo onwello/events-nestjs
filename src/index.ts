@@ -1,27 +1,44 @@
-// Core decorators
-export * from './decorators/event-handler.decorator';
-export * from './decorators/event-publisher.decorator';
-export * from './decorators/event-subscriber.decorator';
+// Core decorators - Tree-shakable individual exports
+export { EventHandler, EventPublisher, EventSubscriber, getEventPublisherMetadata, getEventSubscriberMetadata } from './decorators';
 
-// Services
-export * from './services/event-system.service';
-export * from './services/event-publisher.service';
-export * from './services/event-consumer.service';
+// Services - Tree-shakable individual exports
+export { EventSystemService, EventPublisherService, EventConsumerService } from './services';
 
-// Modules
-export * from './modules/events.module';
+// Modules - Tree-shakable individual exports
+export { EventsModule } from './modules';
 
-// Types and interfaces
-export * from './types/event.types';
-export * from './types/handler.types';
-export * from './types/config.types';
+// Types and interfaces - Tree-shakable individual exports
+export type {
+  NestJSEvent,
+  NestJSEventMetadata,
+  EventHandlerMetadata,
+  EventPublisherMetadata,
+  EventSubscriberMetadata,
+  EventHandlerContext,
+  EventHandlerResult,
+  EventHandlerRegistry,
+  EventPublisherRegistry,
+  EventSubscriberRegistry,
+  NestJSEventHandlerOptions,
+  NestJSEventPublisherOptions,
+  NestJSEventSubscriberOptions,
+  NestJSEventsModuleOptions,
+  RedisClusterConfig,
+  RedisSentinelConfig,
+  PartitioningConfig,
+  OrderingConfig,
+  SchemaConfig,
+  ReplayConfig,
+  DLQConfig,
+  AdvancedRoutingConfig,
+  wrapNestJSEventHandler,
+  wrapNestJSPatternHandler,
+} from './types';
 
-// Utilities
-export * from './utils/event.utils';
-export * from './utils/config.factory';
-export * from './utils/config.validator';
+// Utilities - Tree-shakable individual exports
+export { EventUtils, ConfigFactory, ConfigValidator } from './utils';
 
-// Re-export core types from @logistically/events
+// Re-export core types from @logistically/events - Tree-shakable
 export type {
   EventPublisher as CoreEventPublisher,
   EventConsumer as CoreEventConsumer,
@@ -40,13 +57,20 @@ export type {
   ValidationResult,
 } from '@logistically/events';
 
-// Re-export functions and classes
+// Re-export functions and classes - Tree-shakable
 export {
   createEventSystem,
   createEventSystemBuilder,
   createEventEnvelope,
 } from '@logistically/events';
 
-// Re-export from event-types submodule
+// Re-export from event-types submodule - Tree-shakable
 export type { EventHeader } from '@logistically/events/dist/event-types';
 export { generateEventId, generateEventHash } from '@logistically/events/dist/event-types';
+
+// Note: Individual named exports above provide better tree-shaking
+// than barrel exports. Import only what you need:
+// 
+// import { EventHandler } from '@logistically/events-nestjs';
+// import { EventPublisherService } from '@logistically/events-nestjs';
+// import { EventsModule } from '@logistically/events-nestjs';

@@ -2,47 +2,22 @@ import { NestJSEventsModuleOptions } from '../types/config.types';
 import { ConfigValidator } from './config.validator';
 
 /**
- * Configuration factory for creating NestJS events module options
+ * Factory class for creating NestJS events module options
  * with support for environment variables and sensible defaults
  */
 export class ConfigFactory {
   /**
    * Create configuration from environment variables with defaults
-   * Note: This returns a partial config as transports must be provided by the user
    */
   static fromEnvironment(): Partial<NestJSEventsModuleOptions> {
     return {
-      service: process.env.SERVICE_NAME || process.env.NODE_ENV === 'production' 
-        ? 'nestjs-service' 
-        : 'nestjs-service-dev',
-      
+      service: process.env.SERVICE_NAME,
       originPrefix: process.env.EVENTS_ORIGIN_PREFIX,
-      
-      origins: process.env.EVENTS_ORIGINS 
-        ? process.env.EVENTS_ORIGINS.split(',').map(s => s.trim())
-        : undefined,
-      
       validationMode: (process.env.EVENTS_VALIDATION_MODE as any) || 'warn',
+      global: process.env.EVENTS_GLOBAL !== 'false',
+      autoDiscovery: process.env.EVENTS_AUTO_DISCOVERY !== 'false',
       
-      global: process.env.EVENTS_GLOBAL !== 'false', // Default to true
-      
-      autoDiscovery: process.env.EVENTS_AUTO_DISCOVERY !== 'false', // Default to true
-      
-      discovery: {
-        scanControllers: process.env.EVENTS_SCAN_CONTROLLERS !== 'false',
-        scanProviders: process.env.EVENTS_SCAN_PROVIDERS !== 'false',
-        metadataKeys: process.env.EVENTS_METADATA_KEYS 
-          ? process.env.EVENTS_METADATA_KEYS.split(',').map(s => s.trim())
-          : undefined,
-      },
-      
-      interceptor: {
-        enableRequestEvents: process.env.EVENTS_REQUEST_EVENTS !== 'false',
-        enableResponseEvents: process.env.EVENTS_RESPONSE_EVENTS !== 'false',
-        correlationIdHeader: process.env.EVENTS_CORRELATION_ID_HEADER || 'x-correlation-id',
-        causationIdHeader: process.env.EVENTS_CAUSATION_ID_HEADER || 'x-causation-id',
-      },
-      
+      // Publisher configuration
       publisher: {
         batching: {
           enabled: process.env.EVENTS_BATCHING_ENABLED !== 'false',
@@ -50,7 +25,6 @@ export class ConfigFactory {
           maxWaitMs: parseInt(process.env.EVENTS_BATCHING_MAX_WAIT_MS || '100'),
           maxConcurrentBatches: parseInt(process.env.EVENTS_BATCHING_MAX_CONCURRENT || '5'),
           strategy: (process.env.EVENTS_BATCHING_STRATEGY as any) || 'size',
-          compression: process.env.EVENTS_BATCHING_COMPRESSION === 'true',
         },
         retry: {
           maxRetries: parseInt(process.env.EVENTS_RETRY_MAX_ATTEMPTS || '3'),
@@ -59,20 +33,136 @@ export class ConfigFactory {
           maxDelay: parseInt(process.env.EVENTS_RETRY_MAX_DELAY || '10000'),
         },
         rateLimiting: {
-          maxRequests: parseInt(process.env.EVENTS_RATE_LIMIT_MAX_REQUESTS || '1000'),
-          timeWindow: parseInt(process.env.EVENTS_RATE_LIMIT_TIME_WINDOW || '60000'),
-          strategy: (process.env.EVENTS_RATE_LIMIT_STRATEGY as any) || 'sliding-window',
+          maxRequests: parseInt(process.env.EVENTS_RATE_LIMITING_MAX_RPS || '1000'),
+          timeWindow: parseInt(process.env.EVENTS_RATE_LIMITING_TIME_WINDOW || '60000'),
+          strategy: (process.env.EVENTS_RATE_LIMITING_STRATEGY as any) || 'sliding-window',
         },
-        validationMode: (process.env.EVENTS_PUBLISHER_VALIDATION_MODE as any) || 'warn',
       },
       
+      // Consumer configuration
       consumer: {
-        enablePatternRouting: process.env.EVENTS_PATTERN_ROUTING !== 'false',
+        enablePatternRouting: process.env.EVENTS_PATTERN_ROUTING === 'true',
         enableConsumerGroups: process.env.EVENTS_CONSUMER_GROUPS !== 'false',
-        poisonMessageHandler: undefined, // Custom handler would need to be configured
         validationMode: (process.env.EVENTS_CONSUMER_VALIDATION_MODE as any) || 'warn',
       },
+      
+      // Discovery configuration
+      discovery: {
+        scanControllers: process.env.EVENTS_SCAN_CONTROLLERS !== 'false',
+        scanProviders: process.env.EVENTS_SCAN_PROVIDERS !== 'false',
+        metadataKeys: process.env.EVENTS_METADATA_KEYS?.split(','),
+      },
+      
+      // Interceptor configuration
+      interceptor: {
+        enableRequestEvents: process.env.EVENTS_REQUEST_EVENTS === 'true',
+        enableResponseEvents: process.env.EVENTS_RESPONSE_EVENTS === 'true',
+        correlationIdHeader: process.env.EVENTS_CORRELATION_ID_HEADER || 'X-Correlation-ID',
+        causationIdHeader: process.env.EVENTS_CAUSATION_ID_HEADER || 'X-Causation-ID',
+      },
+
+      // Advanced Redis Cluster configuration
+      redisCluster: process.env.REDIS_ENABLE_CLUSTER_MODE === 'true' ? {
+        clusterNodes: this.parseClusterNodes(process.env.REDIS_CLUSTER_NODES),
+        enableFailover: process.env.REDIS_ENABLE_FAILOVER !== 'false',
+        failoverRecovery: {
+          enabled: process.env.REDIS_FAILOVER_RECOVERY_ENABLED !== 'false',
+          maxRetries: parseInt(process.env.REDIS_FAILOVER_MAX_RETRIES || '3'),
+          retryDelay: parseInt(process.env.REDIS_FAILOVER_RETRY_DELAY || '1000'),
+        }
+      } : undefined,
+
+      // Advanced Redis Sentinel configuration
+      redisSentinel: process.env.REDIS_ENABLE_SENTINEL_MODE === 'true' ? {
+        sentinels: this.parseSentinelNodes(process.env.REDIS_SENTINEL_NODES),
+        sentinelName: process.env.REDIS_SENTINEL_NAME || 'mymaster',
+        connectionTimeout: parseInt(process.env.REDIS_SENTINEL_CONNECTION_TIMEOUT || '5000'),
+        commandTimeout: parseInt(process.env.REDIS_SENTINEL_COMMAND_TIMEOUT || '3000'),
+      } : undefined,
+
+      // Advanced partitioning configuration
+      partitioning: process.env.REDIS_ENABLE_PARTITIONING === 'true' ? {
+        enabled: true,
+        strategy: (process.env.REDIS_PARTITIONING_STRATEGY as any) || 'hash',
+        autoScaling: process.env.REDIS_PARTITIONING_AUTO_SCALING !== 'false',
+        partitionCount: parseInt(process.env.REDIS_PARTITION_COUNT || '8'),
+      } : undefined,
+
+      // Message ordering configuration
+      ordering: process.env.REDIS_ENABLE_ORDERING === 'true' ? {
+        enabled: true,
+        strategy: (process.env.REDIS_ORDERING_STRATEGY as any) || 'partition',
+        enableCausalDependencies: process.env.REDIS_ENABLE_CAUSAL_DEPENDENCIES !== 'false',
+      } : undefined,
+
+      // Schema management configuration
+      schema: process.env.REDIS_ENABLE_SCHEMA_MANAGEMENT === 'true' ? {
+        enabled: true,
+        validationMode: (process.env.REDIS_SCHEMA_VALIDATION_MODE as any) || 'strict',
+        schemaRegistry: process.env.REDIS_SCHEMA_REGISTRY,
+        enableSchemaEvolution: process.env.REDIS_SCHEMA_EVOLUTION !== 'false',
+        versioning: (process.env.REDIS_SCHEMA_VERSIONING as any) || 'semantic',
+      } : undefined,
+
+      // Message replay configuration
+      replay: process.env.REDIS_ENABLE_MESSAGE_REPLAY === 'true' ? {
+        enabled: true,
+        maxReplaySize: parseInt(process.env.REDIS_REPLAY_MAX_SIZE || '10000'),
+        enableSelectiveReplay: process.env.REDIS_REPLAY_SELECTIVE !== 'false',
+        replayStrategies: process.env.REDIS_REPLAY_STRATEGIES?.split(',') as any,
+      } : undefined,
+
+      // Advanced DLQ configuration
+      dlq: process.env.REDIS_ENABLE_DLQ === 'true' ? {
+        enabled: true,
+        streamPrefix: process.env.REDIS_DLQ_STREAM_PREFIX || 'dlq:',
+        maxRetries: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
+        retryDelay: parseInt(process.env.REDIS_RETRY_DELAY || '1000'),
+        maxRetriesBeforeDLQ: parseInt(process.env.REDIS_MAX_RETRIES_BEFORE_DLQ || '3'),
+        retention: parseInt(process.env.REDIS_DLQ_RETENTION || '86400000'), // 24 hours
+        classification: {
+          enabled: process.env.REDIS_DLQ_CLASSIFICATION === 'true',
+          errorTypes: process.env.REDIS_DLQ_ERROR_TYPES?.split(',') || ['validation', 'processing', 'timeout'],
+        },
+      } : undefined,
+
+      // Advanced routing configuration
+      advancedRouting: {
+        enablePatternRouting: process.env.EVENTS_PATTERN_ROUTING === 'true',
+        enableContentBasedRouting: process.env.EVENTS_CONTENT_BASED_ROUTING === 'true',
+        enableConditionalRouting: process.env.EVENTS_CONDITIONAL_ROUTING === 'true',
+      },
     };
+  }
+
+  /**
+   * Parse cluster nodes from environment variable
+   */
+  private static parseClusterNodes(nodesStr?: string): Array<{ host: string; port: number }> {
+    if (!nodesStr) return [];
+    
+    return nodesStr.split(',').map(node => {
+      const [host, port] = node.trim().split(':');
+      return {
+        host: host.trim(),
+        port: parseInt(port.trim()) || 7000
+      };
+    });
+  }
+
+  /**
+   * Parse sentinel nodes from environment variable
+   */
+  private static parseSentinelNodes(nodesStr?: string): Array<{ host: string; port: number }> {
+    if (!nodesStr) return [];
+    
+    return nodesStr.split(',').map(node => {
+      const [host, port] = node.trim().split(':');
+      return {
+        host: host.trim(),
+        port: parseInt(port.trim()) || 26379
+      };
+    });
   }
 
   /**
@@ -88,7 +178,12 @@ export class ConfigFactory {
       maxRetries: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
       enableCompression: process.env.REDIS_ENABLE_COMPRESSION === 'true',
       enablePartitioning: process.env.REDIS_ENABLE_PARTITIONING === 'true',
-      partitionCount: parseInt(process.env.REDIS_PARTITION_COUNT || '1'),
+      partitionCount: parseInt(process.env.REDIS_PARTITION_COUNT || '8'),
+      
+      // Advanced features
+      enableOrdering: process.env.REDIS_ENABLE_ORDERING === 'true',
+      enableSchemaManagement: process.env.REDIS_ENABLE_SCHEMA_MANAGEMENT === 'true',
+      enableMessageReplay: process.env.REDIS_ENABLE_MESSAGE_REPLAY === 'true',
     };
   }
 
@@ -152,6 +247,15 @@ export class ConfigFactory {
         ...envConfig.interceptor,
         ...userConfig.interceptor,
       },
+      // Advanced features
+      redisCluster: userConfig.redisCluster || envConfig.redisCluster,
+      redisSentinel: userConfig.redisSentinel || envConfig.redisSentinel,
+      partitioning: userConfig.partitioning || envConfig.partitioning,
+      ordering: userConfig.ordering || envConfig.ordering,
+      schema: userConfig.schema || envConfig.schema,
+      replay: userConfig.replay || envConfig.replay,
+      dlq: userConfig.dlq || envConfig.dlq,
+      advancedRouting: userConfig.advancedRouting || envConfig.advancedRouting,
     };
     
     // Validate the merged configuration

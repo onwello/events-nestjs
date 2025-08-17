@@ -1,5 +1,84 @@
 import { EventSystemConfig, PublisherConfig, ConsumerConfig } from '@logistically/events';
 
+// Advanced Redis Cluster Configuration
+export interface RedisClusterConfig {
+  clusterNodes: Array<{ host: string; port: number }>;
+  enableFailover: boolean;
+  failoverRecovery?: {
+    enabled: boolean;
+    maxRetries: number;
+    retryDelay: number;
+  };
+}
+
+// Advanced Redis Sentinel Configuration
+export interface RedisSentinelConfig {
+  sentinels: Array<{ host: string; port: number }>;
+  sentinelName: string;
+  connectionTimeout?: number;
+  commandTimeout?: number;
+}
+
+// Advanced Partitioning Configuration
+export interface PartitioningConfig {
+  enabled: boolean;
+  strategy: 'hash' | 'roundRobin' | 'keyBased' | 'dynamic';
+  autoScaling: boolean;
+  partitionKeyExtractor?: (message: any) => string;
+  partitionCount: number;
+}
+
+// Message Ordering Configuration
+export interface OrderingConfig {
+  enabled: boolean;
+  strategy: 'partition' | 'global';
+  enableCausalDependencies: boolean;
+}
+
+// Schema Management Configuration
+export interface SchemaConfig {
+  enabled: boolean;
+  validationMode: 'strict' | 'warn' | 'none';
+  schemaRegistry?: string;
+  enableSchemaEvolution: boolean;
+  versioning?: 'semantic' | 'numeric';
+}
+
+// Message Replay Configuration
+export interface ReplayConfig {
+  enabled: boolean;
+  maxReplaySize: number;
+  enableSelectiveReplay: boolean;
+  replayStrategies?: Array<'from-timestamp' | 'from-sequence' | 'from-checkpoint'>;
+}
+
+// Advanced DLQ Configuration
+export interface DLQConfig {
+  enabled: boolean;
+  streamPrefix: string;
+  maxRetries: number;
+  retryDelay: number;
+  maxRetriesBeforeDLQ: number;
+  retention: number; // in milliseconds
+  classification?: {
+    enabled: boolean;
+    errorTypes: string[];
+  };
+  poisonMessageHandler?: (message: any, error: any) => Promise<void>;
+}
+
+// Advanced Routing Configuration
+export interface AdvancedRoutingConfig {
+  enablePatternRouting: boolean;
+  enableContentBasedRouting: boolean;
+  enableConditionalRouting: boolean;
+  routingRules?: Array<{
+    condition: (event: any) => boolean;
+    target: string;
+    priority: number;
+  }>;
+}
+
 export interface NestJSEventsModuleOptions extends EventSystemConfig {
   /**
    * Whether to make the module global
@@ -10,6 +89,46 @@ export interface NestJSEventsModuleOptions extends EventSystemConfig {
    * Whether to automatically discover and register event handlers
    */
   autoDiscovery?: boolean;
+  
+  /**
+   * Redis Cluster configuration for high availability
+   */
+  redisCluster?: RedisClusterConfig;
+  
+  /**
+   * Redis Sentinel configuration for high availability
+   */
+  redisSentinel?: RedisSentinelConfig;
+  
+  /**
+   * Advanced partitioning configuration
+   */
+  partitioning?: PartitioningConfig;
+  
+  /**
+   * Message ordering configuration
+   */
+  ordering?: OrderingConfig;
+  
+  /**
+   * Schema management configuration
+   */
+  schema?: SchemaConfig;
+  
+  /**
+   * Message replay configuration
+   */
+  replay?: ReplayConfig;
+  
+  /**
+   * Advanced DLQ configuration
+   */
+  dlq?: DLQConfig;
+  
+  /**
+   * Advanced routing configuration (separate from core routing)
+   */
+  advancedRouting?: AdvancedRoutingConfig;
   
   /**
    * Custom event handler discovery options

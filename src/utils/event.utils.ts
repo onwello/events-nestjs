@@ -57,7 +57,7 @@ export class EventUtils {
    * Validates if an event object is properly formatted
    */
   static validateEvent(event: any): event is NestJSEvent {
-    return (
+    const isValid = (
       event &&
       typeof event === 'object' &&
       event.header &&
@@ -68,6 +68,8 @@ export class EventUtils {
       typeof event.header.timestamp === 'string' &&
       event.body !== undefined
     );
+    
+    return Boolean(isValid);
   }
 
   /**
