@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SimpleEventHandlerService = exports.GlobalEventHandlerService = exports.EventDiscoveryService = exports.AutoEventHandlerService = exports.EventHandlerRegistryService = exports.EventConsumerService = exports.EventPublisherService = exports.EventSystemService = void 0;
+exports.SimpleEventHandlerService = exports.GlobalEventHandlerService = exports.EnterpriseEventRegistrationService = exports.EventDiscoveryService = exports.AutoEventHandlerService = exports.EventHandlerRegistryService = exports.EventConsumerService = exports.EventPublisherService = exports.EventSystemService = void 0;
 // Services index - Tree-shakable exports
 var event_system_service_1 = require("./event-system.service");
 Object.defineProperty(exports, "EventSystemService", { enumerable: true, get: function () { return event_system_service_1.EventSystemService; } });
@@ -14,6 +14,8 @@ var auto_event_handler_service_1 = require("./auto-event-handler.service");
 Object.defineProperty(exports, "AutoEventHandlerService", { enumerable: true, get: function () { return auto_event_handler_service_1.AutoEventHandlerService; } });
 var event_discovery_service_1 = require("./event-discovery.service");
 Object.defineProperty(exports, "EventDiscoveryService", { enumerable: true, get: function () { return event_discovery_service_1.EventDiscoveryService; } });
+var enterprise_event_registration_service_1 = require("./enterprise-event-registration.service");
+Object.defineProperty(exports, "EnterpriseEventRegistrationService", { enumerable: true, get: function () { return enterprise_event_registration_service_1.EnterpriseEventRegistrationService; } });
 var global_event_handler_service_1 = require("./global-event-handler.service");
 Object.defineProperty(exports, "GlobalEventHandlerService", { enumerable: true, get: function () { return global_event_handler_service_1.GlobalEventHandlerService; } });
 var simple_event_handler_service_1 = require("./simple-event-handler.service");

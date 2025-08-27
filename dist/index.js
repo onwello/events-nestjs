@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateEventHash = exports.generateEventId = exports.createEventEnvelope = exports.createEventSystemBuilder = exports.createEventSystem = exports.ConfigValidator = exports.ConfigFactory = exports.EventUtils = exports.EventsModule = exports.AutoEventHandlerBase = exports.AutoRegisterEvents = exports.getAutoEventHandlerMetadata = exports.AutoEventHandler = exports.getEventSubscriberMetadata = exports.getEventPublisherMetadata = exports.EventSubscriber = exports.EventPublisher = exports.EventHandler = exports.EventDiscoveryService = exports.AutoEventHandlerService = exports.EventHandlerRegistryService = exports.EventConsumerService = exports.EventPublisherService = exports.EventSystemService = void 0;
+exports.wrapNestJSPatternHandler = exports.wrapNestJSEventHandler = exports.EventsModule = exports.AutoEventHandlerMixinWithConfig = exports.AutoEventHandlerMixin = exports.AutoEventHandlerBase = exports.AutoEvents = exports.AutoRegisterEvents = exports.getAutoEventHandlerMetadata = exports.AutoEventHandler = exports.getEventSubscriberMetadata = exports.getEventPublisherMetadata = exports.EventSubscriber = exports.EventPublisher = exports.EventHandler = exports.EnterpriseEventRegistrationService = exports.EventDiscoveryService = exports.AutoEventHandlerService = exports.EventHandlerRegistryService = exports.EventConsumerService = exports.EventPublisherService = exports.EventSystemService = void 0;
 // Services - Tree-shakable individual exports
 var services_1 = require("./services");
 Object.defineProperty(exports, "EventSystemService", { enumerable: true, get: function () { return services_1.EventSystemService; } });
@@ -9,6 +9,8 @@ Object.defineProperty(exports, "EventConsumerService", { enumerable: true, get: 
 Object.defineProperty(exports, "EventHandlerRegistryService", { enumerable: true, get: function () { return services_1.EventHandlerRegistryService; } });
 Object.defineProperty(exports, "AutoEventHandlerService", { enumerable: true, get: function () { return services_1.AutoEventHandlerService; } });
 Object.defineProperty(exports, "EventDiscoveryService", { enumerable: true, get: function () { return services_1.EventDiscoveryService; } });
+var enterprise_event_registration_service_1 = require("./services/enterprise-event-registration.service");
+Object.defineProperty(exports, "EnterpriseEventRegistrationService", { enumerable: true, get: function () { return enterprise_event_registration_service_1.EnterpriseEventRegistrationService; } });
 // Decorators - Tree-shakable individual exports
 var decorators_1 = require("./decorators");
 Object.defineProperty(exports, "EventHandler", { enumerable: true, get: function () { return decorators_1.EventHandler; } });
@@ -21,28 +23,18 @@ Object.defineProperty(exports, "AutoEventHandler", { enumerable: true, get: func
 Object.defineProperty(exports, "getAutoEventHandlerMetadata", { enumerable: true, get: function () { return auto_event_handler_decorator_1.getAutoEventHandlerMetadata; } });
 var auto_register_events_decorator_1 = require("./decorators/auto-register-events.decorator");
 Object.defineProperty(exports, "AutoRegisterEvents", { enumerable: true, get: function () { return auto_register_events_decorator_1.AutoRegisterEvents; } });
+Object.defineProperty(exports, "AutoEvents", { enumerable: true, get: function () { return auto_register_events_decorator_1.AutoEvents; } });
 // Base classes - Tree-shakable individual exports
 var auto_event_handler_base_1 = require("./base/auto-event-handler.base");
 Object.defineProperty(exports, "AutoEventHandlerBase", { enumerable: true, get: function () { return auto_event_handler_base_1.AutoEventHandlerBase; } });
+// Mixins - Tree-shakable individual exports
+var auto_event_handler_mixin_1 = require("./mixins/auto-event-handler.mixin");
+Object.defineProperty(exports, "AutoEventHandlerMixin", { enumerable: true, get: function () { return auto_event_handler_mixin_1.AutoEventHandlerMixin; } });
+Object.defineProperty(exports, "AutoEventHandlerMixinWithConfig", { enumerable: true, get: function () { return auto_event_handler_mixin_1.AutoEventHandlerMixinWithConfig; } });
 // Modules - Tree-shakable individual exports
-var modules_1 = require("./modules");
-Object.defineProperty(exports, "EventsModule", { enumerable: true, get: function () { return modules_1.EventsModule; } });
+var events_module_1 = require("./modules/events.module");
+Object.defineProperty(exports, "EventsModule", { enumerable: true, get: function () { return events_module_1.EventsModule; } });
 // Utilities - Tree-shakable individual exports
-var utils_1 = require("./utils");
-Object.defineProperty(exports, "EventUtils", { enumerable: true, get: function () { return utils_1.EventUtils; } });
-Object.defineProperty(exports, "ConfigFactory", { enumerable: true, get: function () { return utils_1.ConfigFactory; } });
-Object.defineProperty(exports, "ConfigValidator", { enumerable: true, get: function () { return utils_1.ConfigValidator; } });
-// Re-export functions and classes - Tree-shakable
-var events_1 = require("@logistically/events");
-Object.defineProperty(exports, "createEventSystem", { enumerable: true, get: function () { return events_1.createEventSystem; } });
-Object.defineProperty(exports, "createEventSystemBuilder", { enumerable: true, get: function () { return events_1.createEventSystemBuilder; } });
-Object.defineProperty(exports, "createEventEnvelope", { enumerable: true, get: function () { return events_1.createEventEnvelope; } });
-var event_types_1 = require("@logistically/events/dist/event-types");
-Object.defineProperty(exports, "generateEventId", { enumerable: true, get: function () { return event_types_1.generateEventId; } });
-Object.defineProperty(exports, "generateEventHash", { enumerable: true, get: function () { return event_types_1.generateEventHash; } });
-// Note: Individual named exports above provide better tree-shaking
-// than barrel exports. Import only what you need:
-// 
-// import { EventHandler } from '@logistically/events-nestjs';
-// import { EventPublisherService } from '@logistically/events-nestjs';
-// import { EventsModule } from '@logistically/events-nestjs';
+var handler_types_1 = require("./types/handler.types");
+Object.defineProperty(exports, "wrapNestJSEventHandler", { enumerable: true, get: function () { return handler_types_1.wrapNestJSEventHandler; } });
+Object.defineProperty(exports, "wrapNestJSPatternHandler", { enumerable: true, get: function () { return handler_types_1.wrapNestJSPatternHandler; } });

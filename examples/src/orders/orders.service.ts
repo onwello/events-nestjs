@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { EventPublisherService, AutoEventHandler, NestJSEvent, AutoEventHandlerBase, EventDiscoveryService } from '@logistically/events-nestjs';
+import { EventPublisherService, AutoEventHandler, NestJSEvent, AutoEvents } from '@logistically/events-nestjs';
 
 export interface Order {
   id: number;
@@ -11,7 +11,8 @@ export interface Order {
 }
 
 @Injectable()
-export class OrdersService extends AutoEventHandlerBase {
+@AutoEvents() // Simple decorator-based approach - no inheritance needed!
+export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
   private orders: Order[] = [
     {
@@ -34,9 +35,9 @@ export class OrdersService extends AutoEventHandlerBase {
 
   constructor(
     private readonly eventPublisher: EventPublisherService,
-    eventDiscoveryService: EventDiscoveryService,
   ) {
-    super(eventDiscoveryService);
+    // No EventDiscoveryService injection needed!
+    // No super() call needed!
   }
 
   findAll(): Order[] {

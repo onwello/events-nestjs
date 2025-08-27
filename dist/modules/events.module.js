@@ -39,6 +39,9 @@ let EventsModule = EventsModule_1 = class EventsModule {
             global_event_handler_service_1.GlobalEventHandlerService,
             simple_event_handler_service_1.SimpleEventHandlerService,
         ];
+        // Note: EnterpriseEventRegistrationService requires DiscoveryService and MetadataScanner
+        // which are NestJS internal services. It's available but requires manual setup
+        // in the root module where these services are available.
         return {
             module: EventsModule_1,
             providers,

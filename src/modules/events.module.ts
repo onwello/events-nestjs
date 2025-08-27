@@ -34,6 +34,10 @@ export class EventsModule {
       SimpleEventHandlerService,
     ];
 
+    // Note: EnterpriseEventRegistrationService requires DiscoveryService and MetadataScanner
+    // which are NestJS internal services. It's available but requires manual setup
+    // in the root module where these services are available.
+
     return {
       module: EventsModule,
       providers,

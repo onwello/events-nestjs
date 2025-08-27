@@ -7,8 +7,8 @@ export interface CreateUserDto {
 }
 
 export interface UpdateUserDto {
-  name?: string;
-  email?: string;
+  name: string;
+  email: string;
 }
 
 @Controller('users')
@@ -21,18 +21,21 @@ export class UsersController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string): Promise<User | null> {
+  async findOne(@Param('id') id: string): Promise<User | undefined> {
     return this.usersService.findOne(parseInt(id, 10));
   }
 
   @Post()
   async create(@Body() createUserDto: CreateUserDto): Promise<User> {
-    return this.usersService.create(createUserDto);
+    return this.usersService.create(createUserDto.name, createUserDto.email);
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto): Promise<User | null> {
-    return this.usersService.update(parseInt(id, 10), updateUserDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto
+  ): Promise<User | undefined> {
+    return this.usersService.update(parseInt(id, 10), updateUserDto.name, updateUserDto.email);
   }
 
   @Delete(':id')

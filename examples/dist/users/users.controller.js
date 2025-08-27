@@ -26,10 +26,10 @@ let UsersController = class UsersController {
         return this.usersService.findOne(parseInt(id, 10));
     }
     async create(createUserDto) {
-        return this.usersService.create(createUserDto);
+        return this.usersService.create(createUserDto.name, createUserDto.email);
     }
     async update(id, updateUserDto) {
-        return this.usersService.update(parseInt(id, 10), updateUserDto);
+        return this.usersService.update(parseInt(id, 10), updateUserDto.name, updateUserDto.email);
     }
     async delete(id) {
         const success = await this.usersService.delete(parseInt(id, 10));

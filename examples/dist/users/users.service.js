@@ -8,76 +8,127 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var UsersService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UsersService = void 0;
 const common_1 = require("@nestjs/common");
 const events_nestjs_1 = require("@logistically/events-nestjs");
-let UsersService = class UsersService {
+let UsersService = UsersService_1 = class UsersService {
     constructor(eventPublisher) {
         this.eventPublisher = eventPublisher;
+        this.logger = new common_1.Logger(UsersService_1.name);
         this.users = [
-            { id: 1, name: 'John Doe', email: 'john@example.com' },
-            { id: 2, name: 'Jane Smith', email: 'jane@example.com' },
+            {
+                id: 1,
+                name: 'John Doe',
+                email: 'john@example.com',
+                createdAt: '2025-08-27T10:00:00.000Z'
+            },
+            {
+                id: 2,
+                name: 'Jane Smith',
+                email: 'jane@example.com',
+                createdAt: '2025-08-27T11:00:00.000Z'
+            }
         ];
     }
-    async findAll() {
-        await this.eventPublisher.publish('users.fetched', {
-            count: this.users.length,
-            timestamp: new Date().toISOString()
-        });
+    findAll() {
         return this.users;
     }
-    async findOne(id) {
-        const user = this.users.find(user => user.id === id);
-        if (user) {
-            await this.eventPublisher.publish('user.fetched', {
-                userId: id,
-                timestamp: new Date().toISOString()
-            });
-        }
-        return user || null;
+    findOne(id) {
+        return this.users.find(user => user.id === id);
     }
-    async create(userData) {
-        const newUser = {
+    async create(name, email) {
+        const user = {
             id: this.users.length + 1,
-            ...userData,
+            name,
+            email,
+            createdAt: new Date().toISOString()
         };
-        this.users.push(newUser);
+        this.users.push(user);
         await this.eventPublisher.publish('user.created', {
-            user: newUser,
+            user,
             timestamp: new Date().toISOString()
         });
-        return newUser;
+        this.logger.log(`User created: ${JSON.stringify(user)}`);
+        return user;
     }
-    async update(id, userData) {
-        const userIndex = this.users.findIndex(user => user.id === id);
-        if (userIndex === -1) {
-            return null;
+    async update(id, name, email) {
+        const user = this.users.find(u => u.id === id);
+        if (!user) {
+            return undefined;
         }
-        this.users[userIndex] = { ...this.users[userIndex], ...userData };
+        user.name = name;
+        user.email = email;
         await this.eventPublisher.publish('user.updated', {
             userId: id,
-            user: this.users[userIndex],
+            user,
             timestamp: new Date().toISOString()
         });
-        return this.users[userIndex];
+        this.logger.log(`User ${id} updated: ${JSON.stringify(user)}`);
+        return user;
     }
     async delete(id) {
-        const userIndex = this.users.findIndex(user => user.id === id);
+        const userIndex = this.users.findIndex(u => u.id === id);
         if (userIndex === -1) {
             return false;
         }
-        const deletedUser = this.users.splice(userIndex, 1)[0];
+        this.users.splice(userIndex, 1);
         await this.eventPublisher.publish('user.deleted', {
             userId: id,
-            user: deletedUser,
             timestamp: new Date().toISOString()
         });
+        this.logger.log(`User ${id} deleted`);
         return true;
+    }
+    getEventHandlers() {
+        return [
+            {
+                eventType: 'order.*',
+                methodName: 'handleAllOrderEvents',
+                priority: 1,
+                async: true,
+                retry: {
+                    maxAttempts: 3,
+                    backoffMs: 1000
+                }
+            },
+            {
+                eventType: 'order.created',
+                methodName: 'handleOrderCreated',
+                priority: 2,
+                async: true
+            },
+            {
+                eventType: 'order.updated',
+                methodName: 'handleOrderUpdated',
+                priority: 2,
+                async: true
+            }
+        ];
+    }
+    getServiceInstance() {
+        return this;
+    }
+    validateEventHandlers() {
+        const handlers = this.getEventHandlers();
+        return handlers.every(handler => typeof this[handler.methodName] === 'function');
+    }
+    onEventHandlersRegistered(handlers) {
+        this.logger.log(`Registered ${handlers.length} event handlers for UsersService`);
+    }
+    async handleAllOrderEvents(event) {
+        this.logger.log(`All order events received: ${JSON.stringify(event)}`);
+    }
+    async handleOrderCreated(event) {
+        this.logger.log(`Order created event received: ${JSON.stringify(event)}`);
+    }
+    async handleOrderUpdated(event) {
+        this.logger.log(`Order updated event received: ${JSON.stringify(event)}`);
     }
 };
 exports.UsersService = UsersService;
-exports.UsersService = UsersService = __decorate([
+exports.UsersService = UsersService = UsersService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [events_nestjs_1.EventPublisherService])
 ], UsersService);

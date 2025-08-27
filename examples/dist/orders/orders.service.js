@@ -13,9 +13,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrdersService = void 0;
 const common_1 = require("@nestjs/common");
 const events_nestjs_1 = require("@logistically/events-nestjs");
-let OrdersService = OrdersService_1 = class OrdersService extends events_nestjs_1.AutoEventHandlerBase {
-    constructor(eventPublisher, eventDiscoveryService) {
-        super(eventDiscoveryService);
+let OrdersService = OrdersService_1 = class OrdersService {
+    constructor(eventPublisher) {
         this.eventPublisher = eventPublisher;
         this.logger = new common_1.Logger(OrdersService_1.name);
         this.orders = [
@@ -105,7 +104,7 @@ __decorate([
 ], OrdersService.prototype, "handleOrderCreated", null);
 exports.OrdersService = OrdersService = OrdersService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [events_nestjs_1.EventPublisherService,
-        events_nestjs_1.EventDiscoveryService])
+    (0, events_nestjs_1.AutoEvents)(),
+    __metadata("design:paramtypes", [events_nestjs_1.EventPublisherService])
 ], OrdersService);
 //# sourceMappingURL=orders.service.js.map
