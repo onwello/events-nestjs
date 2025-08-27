@@ -1,1 +1,8 @@
 node_modules
+coverage/
+dist/
+*.log
+examples/dist/
+examples/*.log
+.DS_Store
+*.tsbuildinfo
