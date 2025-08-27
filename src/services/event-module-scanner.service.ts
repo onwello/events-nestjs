@@ -1,162 +1,81 @@
-import { Injectable, Logger, OnModuleInit, Type } from '@nestjs/common';
-import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { EventListenersController } from './event-listeners-controller.service';
 import { EventDiscoveryService } from './event-discovery.service';
-import { AUTO_EVENT_HANDLER_METADATA } from '../decorators/auto-event-handler.decorator';
-
-export interface EventHandlerMetadata {
-  instance: any;
-  methodName: string;
-  eventType: string;
-  options?: any;
-}
 
 @Injectable()
 export class EventModuleScanner implements OnModuleInit {
   private readonly logger = new Logger(EventModuleScanner.name);
-  private discoveredHandlers: EventHandlerMetadata[] = [];
 
   constructor(
-    private readonly discoveryService: DiscoveryService,
-    private readonly metadataScanner: MetadataScanner,
-    private readonly reflector: Reflector,
-    private readonly eventDiscoveryService: EventDiscoveryService,
+    @Optional() private readonly listenersController?: EventListenersController,
+    @Optional() private readonly eventDiscoveryService?: EventDiscoveryService,
   ) {}
 
   async onModuleInit() {
-    this.logger.log('Starting automatic event handler discovery...');
-    await this.scanModules();
-    await this.registerDiscoveredHandlers();
-    this.logger.log(`Automatic discovery completed. Found ${this.discoveredHandlers.length} event handlers.`);
-  }
-
-  /**
-   * Scan all modules for event handlers decorated with @AutoEventHandler
-   */
-  private async scanModules(): Promise<void> {
-    try {
-      // Get all providers from the application
-      const providers = this.discoveryService.getProviders();
-      const controllers = this.discoveryService.getControllers();
-
-      // Scan providers for event handlers
-      for (const provider of providers) {
-        if (provider.instance) {
-          await this.scanInstance(provider.instance, 'provider');
-        }
-      }
-
-      // Scan controllers for event handlers
-      for (const controller of controllers) {
-        if (controller.instance) {
-          await this.scanInstance(controller.instance, 'controller');
-        }
-      }
-
-      this.logger.debug(`Scanned ${providers.length} providers and ${controllers.length} controllers`);
-    } catch (error) {
-      this.logger.error('Error during module scanning:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Scan a single instance for event handler methods
-   */
-  private async scanInstance(instance: any, type: 'provider' | 'controller'): Promise<void> {
-    const instanceName = instance.constructor?.name || 'Unknown';
+    this.logger.log('EventModuleScanner: Starting automatic event handler discovery...');
     
+    if (!this.listenersController || !this.eventDiscoveryService) {
+      this.logger.warn('EventModuleScanner: Dependencies not available, using fallback discovery');
+      this.logger.log('EventModuleScanner: Handlers will be registered via @AutoEvents decorator and EventDiscoveryService');
+      return;
+    }
+
+    this.logger.log('EventModuleScanner: Automatic discovery enabled - scanning for event handlers');
+    
+    // Trigger discovery immediately - the EventDiscoveryService will handle timing
+    await this.scanAndRegisterAllHandlers();
+  }
+
+  /**
+   * Scan all services and register their event handlers automatically
+   * This is the core of the automatic discovery system
+   */
+  private async scanAndRegisterAllHandlers(): Promise<void> {
     try {
-      // Get all method names from the instance
-      const methodNames = this.metadataScanner.getAllMethodNames(instance);
-
-      for (const methodName of methodNames) {
-        const method = instance[methodName];
-        
-        if (typeof method === 'function') {
-          // Check if the method has @AutoEventHandler metadata
-          const metadata = this.reflector.get<{
-            eventType: string;
-            options?: any;
-          }>(
-            AUTO_EVENT_HANDLER_METADATA,
-            method
-          );
-
-          if (metadata && metadata.eventType) {
-            this.discoveredHandlers.push({
-              instance,
-              methodName,
-              eventType: metadata.eventType,
-              options: metadata.options || {}
-            });
-
-            this.logger.debug(
-              `Found event handler: ${instanceName}.${methodName} -> ${metadata.eventType}`
-            );
-          }
-        }
+      this.logger.log('EventModuleScanner: Starting global scan for event handlers...');
+      
+      // Trigger registration of any pending services in the EventDiscoveryService
+      if (this.eventDiscoveryService) {
+        await this.eventDiscoveryService.triggerRegistration();
       }
+      
+      this.logger.log('EventModuleScanner: Global scan completed - triggered registration of pending services');
+      
     } catch (error) {
-      this.logger.warn(`Error scanning instance ${instanceName}:`, error);
+      this.logger.error('EventModuleScanner: Failed to scan and register handlers:', error);
     }
   }
 
   /**
-   * Register all discovered event handlers
+   * Register event handlers for an instance if it has any
+   * This method can be called by other services
    */
-  private async registerDiscoveredHandlers(): Promise<void> {
-    try {
-      for (const handler of this.discoveredHandlers) {
-        await this.eventDiscoveryService.registerHandler(
-          handler.instance,
-          handler.methodName,
-          {
-            eventType: handler.eventType,
-            ...handler.options
-          }
-        );
-      }
-
-      this.logger.log(`Successfully registered ${this.discoveredHandlers.length} event handlers`);
-    } catch (error) {
-      this.logger.error('Error registering discovered handlers:', error);
-      throw error;
+  async registerHandlersIfFound(instance: any): Promise<number> {
+    if (!this.listenersController) {
+      return 0;
     }
-  }
 
-  /**
-   * Get all discovered event handlers (for debugging/testing)
-   */
-  getDiscoveredHandlers(): EventHandlerMetadata[] {
-    return [...this.discoveredHandlers];
-  }
+    if (!instance || typeof instance !== 'object') {
+      return 0;
+    }
 
-  /**
-   * Get handlers by event type
-   */
-  getHandlersByEventType(eventType: string): EventHandlerMetadata[] {
-    return this.discoveredHandlers.filter(handler => {
-      // Support pattern matching (e.g., 'user.*' matches 'user.created')
-      if (handler.eventType.includes('*')) {
-        const pattern = handler.eventType.replace(/\*/g, '.*');
-        const regex = new RegExp(`^${pattern}$`);
-        return regex.test(eventType);
+    // Check if this instance has any event handlers
+    if (!this.listenersController.hasEventHandlers(instance)) {
+      return 0;
+    }
+
+    try {
+      this.logger.debug(`EventModuleScanner: Found event handlers in ${instance.constructor.name}`);
+      const registeredCount = await this.listenersController.registerEventHandlers({ instance });
+      
+      if (registeredCount > 0) {
+        this.logger.log(`EventModuleScanner: Auto-registered ${registeredCount} event handlers for ${instance.constructor.name}`);
       }
-      return handler.eventType === eventType;
-    });
-  }
-
-  /**
-   * Get handlers by instance
-   */
-  getHandlersByInstance(instance: any): EventHandlerMetadata[] {
-    return this.discoveredHandlers.filter(handler => handler.instance === instance);
-  }
-
-  /**
-   * Clear discovered handlers (for testing)
-   */
-  clearDiscoveredHandlers(): void {
-    this.discoveredHandlers = [];
+      
+      return registeredCount;
+    } catch (error) {
+      this.logger.error(`EventModuleScanner: Failed to register handlers for ${instance.constructor.name}:`, error);
+      return 0;
+    }
   }
 }

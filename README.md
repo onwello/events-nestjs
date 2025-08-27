@@ -1,841 +1,238 @@
 # @logistically/events-nestjs
 
-NestJS integration for [@logistically/events](https://github.com/onwello/events) v3 - Event-driven architecture with Redis Streams, comprehensive batching, reliable consumption, and enterprise-grade features.
-
-## 🚀 Features
-
-### Core Integration
-- **Seamless Integration**: Built on top of `@logistically/events` v3 with full feature parity
-- **NestJS Native**: Designed specifically for NestJS applications with decorators and dependency injection
-- **Auto-Discovery**: Automatically discovers and registers event handlers and subscribers
-- **Type Safety**: Full TypeScript support with comprehensive types
-- **Tree-Shakable**: Import only what you need for optimal bundle sizes
-
-### Event Management
-- **Event Handlers**: `@EventHandler()` decorator for processing events
-- **Event Publishers**: `@EventPublisher()` decorator for publishing events
-- **Event Subscribers**: `@EventSubscriber()` decorator for subscribing to events
-- **Correlation Tracking**: Built-in correlation and causation ID support
-
-### Transport Support
-- **Redis Streams**: Production-ready Redis Streams transport with consumer groups
-- **Redis Cluster**: Full cluster mode support with automatic failover
-- **Redis Sentinel**: Sentinel mode for high availability
-- **Memory Transport**: Fast in-memory transport for testing and development
-- **Plugin System**: Extensible transport plugin system
-
-### Enterprise Features
-- **Origin-Based Routing**: Regional isolation and namespace separation
-- **Advanced Batching**: Configurable message batching with multiple strategies
-- **Retry Mechanisms**: Sophisticated retry strategies with backoff
-- **Validation**: Comprehensive event validation with Zod schemas
-- **Comprehensive Monitoring**: Built-in statistics, metrics, and health checks
-- **Message Ordering**: Global sequencing and causal dependency tracking
-- **Schema Management**: Event schema validation and evolution
-- **Message Replay**: Replay messages from specific points in time
-
-## 🔧 Configuration
-
-### Basic Setup
-
-```typescript
-import { Module } from '@nestjs/common';
-import { EventsModule } from '@logistically/events-nestjs';
-import { MemoryTransportPlugin } from '@logistically/events';
-
-@Module({
-  imports: [
-    EventsModule.forRoot({
-      service: 'my-service',
-      originPrefix: 'my-org',
-      autoDiscovery: true,
-      transports: new Map([
-        ['memory', new MemoryTransportPlugin().createTransport({})]
-      ]),
-      global: true
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-### Memory Transport Configuration
-
-The memory transport is perfect for development, testing, and simple applications:
-
-```typescript
-EventsModule.forRoot({
-  service: 'my-service',
-  originPrefix: 'my-org',
-  autoDiscovery: true,
-  transports: new Map([
-    ['memory', new MemoryTransportPlugin().createTransport({
-      // Memory transport options
-      enablePatternRouting: true,    // Enable pattern-based event routing
-      maxQueueSize: 10000,          // Maximum events in memory queue
-      processingTimeout: 5000,       // Event processing timeout (ms)
-    })]
-  ]),
-  publisher: {
-    batching: {
-      enabled: true,
-      maxSize: 100,
-      strategy: 'time',
-      maxWaitMs: 1000,
-      maxConcurrentBatches: 5
-    }
-  },
-  global: true
-})
-```
-
-**Memory Transport Characteristics:**
-- ✅ **Immediate Processing**: Events processed in real-time
-- ✅ **Pattern Routing**: Support for `user.*`, `*.created` patterns
-- ✅ **Full Event Envelopes**: Complete metadata and headers
-- ✅ **Multiple Handlers**: Multiple handlers per event type
-- ❌ **No Persistence**: Events lost on restart
-- ❌ **No Clustering**: Single instance only
-- ❌ **No Retry Logic**: Failed events are lost
-
-### Redis Transport Configuration
-
-For production applications with persistence and clustering:
-
-```typescript
-import { RedisStreamsPlugin } from '@logistically/events';
-
-EventsModule.forRoot({
-  service: 'my-service',
-  originPrefix: 'my-org',
-  autoDiscovery: true,
-  transports: new Map([
-    ['redis', new RedisStreamsPlugin().createTransport({
-      redis: {
-        host: 'localhost',
-        port: 6379,
-        password: 'your-password',
-        db: 0,
-        // Cluster configuration
-        cluster: {
-          nodes: [
-            { host: 'redis-1', port: 6379 },
-            { host: 'redis-2', port: 6379 },
-            { host: 'redis-3', port: 6379 }
-          ]
-        }
-      },
-      streams: {
-        consumerGroup: 'my-service-group',
-        consumerId: 'consumer-1',
-        enablePartitioning: true,
-        partitionCount: 8
-      }
-    })]
-  ]),
-  publisher: {
-    batching: {
-      enabled: true,
-      maxSize: 1000,
-      strategy: 'partition',
-      maxWaitMs: 100,
-      maxConcurrentBatches: 10
-    },
-    retry: {
-      maxRetries: 3,
-      backoffStrategy: 'exponential',
-      baseDelay: 1000,
-      maxDelay: 10000
-    }
-  },
-  consumer: {
-    enablePatternRouting: true,
-    enableConsumerGroups: true,
-    validationMode: 'strict'
-  },
-  global: true
-})
-```
-
-### Event Handler Configuration
-
-```typescript
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { AutoEventHandler, EventDiscoveryService, NestJSEvent } from '@logistically/events-nestjs';
-
-@Injectable()
-export class MyService implements OnModuleInit {
-  constructor(
-    private readonly eventDiscoveryService: EventDiscoveryService,
-  ) {}
-
-  async onModuleInit() {
-    // Register event handlers
-    await this.eventDiscoveryService.registerEventHandlers(this);
-  }
-
-  // Pattern-based handler
-  @AutoEventHandler({ eventType: 'user.*' })
-  async handleAllUserEvents(event: NestJSEvent<any>) {
-    console.log('All user events:', event.header.type, event.body);
-  }
-
-  // Specific handler
-  @AutoEventHandler({ eventType: 'user.created' })
-  async handleUserCreated(event: NestJSEvent<any>) {
-    console.log('User created:', event.body);
-  }
-
-  // Handler with retry configuration
-  @AutoEventHandler({ 
-    eventType: 'order.processed',
-    retry: {
-      maxAttempts: 3,
-      backoffMs: 1000
-    }
-  })
-  async handleOrderProcessed(event: NestJSEvent<any>) {
-    console.log('Order processed:', event.body);
-  }
-}
-```
-
-## 🔬 Advanced Features
-
-All advanced features are now **fully implemented and accessible** through our NestJS integration layer. No need to use the core library directly!
-
-### Event Envelopes
-Events in the system are wrapped in structured envelopes that provide metadata and context:
-
-```typescript
-interface EventEnvelope<T = any> {
-  header: {
-    id: string;                    // Unique event identifier
-    type: string;                  // Event type (e.g., 'user.created')
-    origin: string;                // Source service/origin name
-    timestamp: string;             // Event creation timestamp (ISO string)
-    originPrefix?: string;         // Optional origin prefix (e.g., 'eu.de')
-  };
-  body: T;                        // Event payload data
-  nestjsMetadata?: {               // NestJS-specific metadata
-    correlationId?: string;        // Request correlation ID
-    causationId?: string;          // Previous event ID that caused this
-    [key: string]: any;           // Additional custom metadata
-  };
-}
-```
-
-**Key Benefits:**
-- **Traceability**: Full event lineage with correlation and causation IDs
-- **Context Preservation**: Service origin, timestamps, and origin prefixes
-- **NestJS Integration**: Built-in metadata support for NestJS applications
-- **Debugging**: Rich context for troubleshooting and monitoring
-
-**Usage Example:**
-```typescript
-// Create event envelope
-const envelope = createEventEnvelope('user.created', 'user-service', userData, 'eu.de');
-
-// Access event properties
-console.log('Event ID:', envelope.header.id);
-console.log('Event Type:', envelope.header.type);
-console.log('Origin:', envelope.header.origin);
-console.log('Timestamp:', envelope.header.timestamp);
-console.log('Body:', envelope.body);
-console.log('Correlation ID:', envelope.nestjsMetadata?.correlationId);
-```
-
-### Stream Partitioning
-Advanced horizontal scaling through intelligent event stream partitioning:
-
-```typescript
-// Enable partitioning in Redis transport
-new RedisStreamsPlugin().createTransport({
-  enablePartitioning: true,
-  partitionCount: 8,             // Number of partitions
-  partitioning: {
-    strategy: 'hash',             // Partitioning strategy
-    autoScaling: true,            // Auto-scale partitions based on load
-    partitionKeyExtractor: (msg) => msg.userId  // Custom key extraction
-  }
-})
-```
-
-**Partitioning Strategies:**
-```typescript
-// Hash-based partitioning (default)
-strategy: 'hash'                  // Consistent hashing for even distribution
-
-// Round-robin partitioning
-strategy: 'roundRobin'            // Sequential distribution across partitions
-
-// Key-based partitioning
-strategy: 'keyBased'              // Partition by specific message properties
-
-// Dynamic load-based partitioning
-strategy: 'dynamic'               // Auto-balance based on partition load
-```
-
-**Publisher Partitioning:**
-```typescript
-// Specify partition for individual events
-await eventPublisher.publish('user.created', userData, {
-  partitionKey: 'userId',        // Field to use for partitioning
-  partition: 2                   // Specific partition number
-});
-```
-
-**Batching with Partitioning:**
-```typescript
-publisher: {
-  batching: {
-    strategy: 'partition',        // Use partition-based batching
-    maxSize: 1000,
-    maxWaitMs: 100
-  }
-}
-```
-
-**Available Features:**
-- **Multiple Strategies**: Hash, Round-robin, Key-based, Dynamic load-based
-- **Auto-scaling**: Automatic partition scaling based on load
-- **Partition Keys**: Route events to specific partitions based on data
-- **Partition Assignment**: Manually assign events to specific partitions
-- **Partition-based Batching**: Batch events by partition for ordering
-- **Load Balancing**: Dynamic load distribution across partitions
-- **Consumer Scaling**: Scale consumers based on partition count
-
-### Redis Cluster & High Availability
-Enterprise-grade Redis deployment support:
-
-```typescript
-// Redis Cluster mode
-new RedisStreamsPlugin().createTransport({
-  clusterNodes: [
-    { host: 'redis-cluster-1', port: 7000 },
-    { host: 'redis-cluster-2', port: 7000 },
-    { host: 'redis-cluster-3', port: 7000 }
-  ],
-  enableFailover: true,
-  failoverRecovery: {
-    enabled: true,
-    maxRetries: 3,
-    retryDelay: 1000
-  }
-})
-
-// Redis Sentinel mode
-new RedisStreamsPlugin().createTransport({
-  sentinels: [
-    { host: 'sentinel-1', port: 26379 },
-    { host: 'sentinel-2', port: 26379 },
-    { host: 'sentinel-3', port: 26379 }
-  ],
-  sentinelName: 'mymaster',
-  connectionTimeout: 5000,
-  commandTimeout: 3000
-})
-```
-
-**Available Features:**
-- **Cluster Mode**: Full Redis cluster support with automatic sharding
-- **Sentinel Mode**: High availability with automatic failover
-- **Failover Recovery**: Automatic failover handling and recovery
-- **Connection Management**: Connection pooling, timeouts, and retry logic
-- **Load Balancing**: Automatic load distribution across cluster nodes
-
-### Consumer Rebalancing
-Advanced consumer distribution and load balancing:
-
-```typescript
-// Consumer group configuration with advanced features
-new RedisStreamsPlugin().createTransport({
-  groupId: 'user-service-group',
-  consumerId: 'consumer-1',
-  enableConsumerGroups: true,
-  consumerGroupOptions: {
-    maxConsumersPerPartition: 2,
-    rebalanceStrategy: 'range',
-    rebalanceInterval: 30000
-  }
-})
-```
-
-**Rebalancing Features:**
-- **Consumer Groups**: Full Redis Streams consumer group support
-- **Automatic Distribution**: Intelligent partition assignment to consumers
-- **Failover**: Automatic failover when consumers go down
-- **Load Balancing**: Dynamic consumer load distribution
-- **Health Monitoring**: Consumer health and performance tracking
-
-### Schema Management & Validation
-Advanced event schema management and validation:
-
-```typescript
-// Enable schema management
-new RedisStreamsPlugin().createTransport({
-  schema: {
-    enabled: true,
-    validationMode: 'strict',
-    schemaRegistry: 'redis://localhost:6379',
-    enableSchemaEvolution: true,
-    versioning: 'semantic'
-  }
-})
-```
-
-**Schema Features:**
-- **Schema Registry**: Centralized schema storage and management
-- **Schema Validation**: Runtime event validation against schemas
-- **Schema Evolution**: Backward-compatible schema changes
-- **Versioning**: Semantic versioning for schemas
-- **Type Safety**: Runtime type checking and validation
-
-### Message Replay & Recovery
-Advanced message replay and recovery capabilities:
-
-```typescript
-// Enable message replay
-new RedisStreamsPlugin().createTransport({
-  replay: {
-    enabled: true,
-    maxReplaySize: 10000,
-    enableSelectiveReplay: true,
-    replayStrategies: ['from-timestamp', 'from-sequence', 'from-checkpoint']
-  }
-})
-```
-
-**Replay Features:**
-- **Selective Replay**: Replay messages from specific points
-- **Multiple Strategies**: Timestamp, sequence, or checkpoint-based replay
-- **Bulk Replay**: Efficient bulk message replay
-- **Recovery**: Disaster recovery and message restoration
-- **Audit Trail**: Complete message history and audit
-
-### Dead Letter Queues (DLQ)
-Failed message handling and recovery:
-
-```typescript
-// Enable DLQ for failed message handling
-new RedisStreamsPlugin().createTransport({
-  enableDLQ: true,
-  dlqStreamPrefix: 'dlq:',        // DLQ stream prefix
-  maxRetries: 3,                  // Max retry attempts
-  retryDelay: 1000,               // Retry delay between attempts
-  maxRetriesBeforeDLQ: 3,         // Max retries before moving to DLQ
-  dlqRetention: 86400000,         // DLQ message retention (ms)
-  dlqClassification: {
-    enabled: true,
-    errorTypes: ['validation', 'processing', 'timeout']
-  },
-  poisonMessageHandler: async (message, error) => {
-    // Custom handling for permanently failed messages
-    console.error('Poison message:', message, error);
-    // Send to monitoring, alerting, etc.
-  }
-})
-```
-
-**DLQ Features:**
-- **Automatic Retry**: Configurable retry attempts with backoff
-- **Error Classification**: Different DLQ streams for different error types
-- **Recovery**: Manual message reprocessing from DLQ
-- **Monitoring**: Built-in metrics for failed message tracking
-- **Error Categorization**: Automatic error type classification
-- **Retention Policies**: Configurable DLQ message retention
-
-
-
-### Message Ordering & Causal Dependencies
-Advanced message ordering and causality tracking:
-
-```typescript
-// Enable message ordering
-new RedisStreamsPlugin().createTransport({
-  ordering: {
-    enabled: true,
-    strategy: 'partition',        // Order within partitions
-    enableCausalDependencies: true
-  }
-})
-```
-
-**Ordering Features:**
-- **Global Sequencing**: Atomic sequence number generation
-- **Partition Ordering**: Maintain order within partitions
-- **Causal Dependencies**: Track message causality and dependencies
-- **Processing Locks**: Ensure ordered message processing
-- **Sequence Management**: Automatic sequence number management
-
-### Advanced Routing
-Sophisticated event routing and filtering:
-
-```typescript
-// Pattern-based event handling
-@EventHandler({ eventType: 'user.*' })
-async handleUserEvents(event: any): Promise<void> {
-  // Handle all user-related events
-}
-
-// Pattern-based subscription
-await eventConsumer.subscribePattern('user.*', handler);
-
-// Content-based routing with conditions
-@EventHandler({
-  eventType: 'user.created',
-  routing: {
-    condition: (event) => event.body.region === 'EU',
-    target: 'eu-processor'
-  }
-})
-```
-
-**Available Routing Features:**
-- **Pattern Matching**: Advanced wildcard pattern support (`user.*`, `*.created`)
-- **Event Type Filtering**: Route events by type patterns
-- **Service-based Routing**: Route by service origin
-- **Conditional Routing**: Dynamic routing based on event properties
-
-### Monitoring & Observability
-Comprehensive metrics and monitoring capabilities:
-
-```typescript
-// Get comprehensive metrics from services
-const publisherStats = await eventPublisherService.getStats();
-const consumerStats = await eventConsumerService.getStats();
-const systemStatus = await eventSystemService.getStatus();
-
-// Access detailed metrics
-console.log('Published messages:', publisherStats?.messagesPublished);
-console.log('Received messages:', consumerStats?.messagesReceived);
-console.log('Error rate:', publisherStats?.errorRate);
-console.log('Throughput:', publisherStats?.throughput);
-console.log('Memory usage:', publisherStats?.memoryUsage);
-console.log('CPU usage:', publisherStats?.cpuUsage);
-```
-
-**Available Metrics:**
-- **Performance Metrics**: Publish/receive latency, throughput, error rates
-- **System Metrics**: Memory usage, CPU usage, uptime, connection status
-- **Partition Metrics**: Partition health, load, and performance
-- **Consumer Metrics**: Processing time, failure rates, retry counts
-- **Transport Metrics**: Connection health, failover events, cluster status
-
-**Health Checks:**
-- **System Health**: Overall system health and status
-- **Transport Health**: Transport connectivity and performance
-- **Partition Health**: Partition availability and load
-- **Consumer Health**: Consumer group health and lag
-- **Cluster Health**: Redis cluster/sentinel health status
-
-**Enterprise Monitoring:**
-- **Real-time Metrics**: Live performance and health monitoring
-- **Historical Data**: Metrics retention and trend analysis
-- **Alerting**: Configurable alerts for performance thresholds
-- **Integration**: Prometheus, DataDog, and other monitoring systems
-
-## 📦 Installation
+A NestJS integration library for the `@logistically/events` event system, providing seamless integration with NestJS applications including automatic event handler discovery, decorators, and services.
+
+## Features
+
+- **NestJS Native Integration** - Built specifically for NestJS with decorators and dependency injection
+- **Automatic Event Handler Discovery** - Automatically discovers and registers event handlers using decorators
+- **Multiple Transport Support** - Redis Streams, Memory, and custom transport plugins
+- **Pattern-Based Event Routing** - Flexible event routing with wildcard support
+- **Type Safety** - Full TypeScript support with proper typing
+- **Zero Configuration** - Works out of the box with sensible defaults
+- **Global Module Support** - Can be configured as a global module for app-wide access
+
+## Installation
 
 ```bash
-npm install @logistically/events-nestjs
+npm install @logistically/events-nestjs @logistically/events
 ```
 
-## 🌳 Tree-Shaking & Import Optimization
+## Quick Start
 
-This library is **fully tree-shakable**, meaning you only bundle the code you actually use. This can reduce your bundle size by **60-80%** for most applications.
-
-### **Optimal Import Patterns**
-
-```typescript
-// ✅ Import only what you need (Tree-shakable)
-import { EventHandler } from '@logistically/events-nestjs';
-import { EventPublisherService } from '@logistically/events-nestjs';
-import { EventsModule } from '@logistically/events-nestjs';
-
-// ❌ Don't import everything (Not tree-shakable)
-import * as Events from '@logistically/events-nestjs';
-```
-
-### **Bundle Size Examples**
-
-| Import Pattern | Bundle Size | Tree-Shaking |
-|----------------|-------------|--------------|
-| `{ EventHandler }` | ~5-10KB | ✅ Excellent |
-| `{ EventHandler, EventPublisher }` | ~8-15KB | ✅ Great |
-| `{ EventsModule }` | ~50-100KB | ⚠️ Full Module |
-| `* as Events` | ~50-100KB | ❌ None |
-
-### **Feature-Based Imports**
-
-```typescript
-// Import only decorators
-import { EventHandler, EventPublisher, EventSubscriber } from '@logistically/events-nestjs';
-
-// Import only services
-import { EventPublisherService, EventConsumerService } from '@logistically/events-nestjs';
-
-// Import only types (type-only imports)
-import type { NestJSEvent, EventEnvelope } from '@logistically/events-nestjs';
-
-// Import only utilities
-import { ConfigFactory, ConfigValidator } from '@logistically/events-nestjs';
-
-// Import only advanced features
-import type { RedisClusterConfig, PartitioningConfig } from '@logistically/events-nestjs';
-```
-
-### **Lazy Loading for Advanced Features**
-
-```typescript
-// Load advanced features only when needed
-if (needsAdvancedFeatures) {
-  const { ConfigFactory, ConfigValidator } = await import('@logistically/events-nestjs');
-  // Advanced features loaded dynamically
-}
-```
-
-## 🏗️ Quick Start
-
-### Basic Setup
+### 1. Import the Module
 
 ```typescript
 import { Module } from '@nestjs/common';
 import { EventsModule } from '@logistically/events-nestjs';
-import { RedisStreamsPlugin, MemoryTransportPlugin } from '@logistically/events';
 
 @Module({
   imports: [
     EventsModule.forRoot({
-      service: 'my-service',
-      transports: new Map([
-        ['redis', new RedisStreamsPlugin().createTransport({
-          url: 'redis://localhost:6379',
-          groupId: 'my-service-group'
-        })],
-        ['memory', new MemoryTransportPlugin().createTransport({})]
-      ])
+      service: 'my-app',
+      autoDiscovery: true,
+      global: true
     })
   ]
 })
 export class AppModule {}
 ```
 
-### Environment-Based Configuration
-
-```typescript
-import { Module } from '@nestjs/common';
-import { EventsModule } from '@logistically/events-nestjs';
-import { ConfigFactory } from '@logistically/events-nestjs';
-
-@Module({
-  imports: [
-    EventsModule.forRoot({
-      // Minimal configuration - environment variables provide defaults
-      service: process.env.SERVICE_NAME || 'my-service',
-      transports: new Map([
-        ['redis', new RedisStreamsPlugin().createTransport({
-          url: process.env.REDIS_URL || 'redis://localhost:6379',
-          groupId: process.env.REDIS_GROUP_ID || 'nestjs-group'
-        })]
-      ])
-    })
-  ]
-})
-export class AppModule {}
-```
-
-### Using ConfigFactory for Advanced Configuration
-
-```typescript
-import { Module } from '@nestjs/common';
-import { EventsModule, ConfigFactory } from '@logistically/events-nestjs';
-
-@Module({
-  imports: [
-    EventsModule.forRoot(
-      ConfigFactory.mergeWithDefaults({
-        service: 'my-service',
-        transports: new Map([
-          ['redis', new RedisStreamsPlugin().createTransport(
-            ConfigFactory.createRedisConfig()
-          )]
-        ]),
-        validationMode: 'strict',
-        global: true
-      })
-    )
-  ]
-})
-export class AppModule {}
-```
-
-### Using Event Handlers
+### 2. Create Event Handlers
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { EventHandler, EventPublisher } from '@logistically/events-nestjs';
+import { AutoEvents, AutoEventHandler, NestJSEvent } from '@logistically/events-nestjs';
+
+@Injectable()
+@AutoEvents()
+export class UserService {
+  @AutoEventHandler({ eventType: 'user.created' })
+  async handleUserCreated(event: NestJSEvent<{ id: number; email: string }>) {
+    console.log('User created:', event.body);
+  }
+
+  @AutoEventHandler({ eventType: 'order.*' })
+  async handleAllOrderEvents(event: NestJSEvent<any>) {
+    console.log('Order event received:', event.body);
+  }
+}
+```
+
+### 3. Publish Events
+
+```typescript
+import { Injectable } from '@nestjs/common';
 import { EventPublisherService } from '@logistically/events-nestjs';
 
 @Injectable()
-export class UserService {
+export class OrderService {
   constructor(private readonly eventPublisher: EventPublisherService) {}
 
-  @EventPublisher({ eventType: 'user.created' })
-  async createUser(email: string, name: string): Promise<string> {
-    const userId = `user-${Date.now()}`;
+  async createOrder(orderData: any) {
+    // Your business logic here
     
-    // Publish the event
-    await this.eventPublisher.publish('user.created', { userId, email, name });
-    
-    return userId;
-  }
-
-  @EventHandler({ eventType: 'user.created' })
-  async handleUserCreated(event: any): Promise<void> {
-    console.log('User created:', event.body);
-    // Handle the event (send email, create profile, etc.)
+    // Publish event
+    await this.eventPublisher.publish('order.created', orderData);
   }
 }
+```
+
+That's it! Your event handlers will be automatically discovered and registered.
+
+## Core Concepts
+
+### Event System
+
+This library integrates with the `@logistically/events` core library, which provides:
+
+- **Event Publishing** - Publish events to multiple transports
+- **Event Consumption** - Consume events with pattern matching
+- **Transport Plugins** - Redis Streams, Memory, and custom transports
+- **Event Routing** - Pattern-based routing between transports
+- **Batching & Performance** - Configurable batching strategies
+- **Reliability** - Dead letter queues, retries, and error handling
+
+For detailed information about the core event system, see [@logistically/events](https://github.com/onwello/events/).
+
+### NestJS Integration
+
+The library provides NestJS-specific features:
+
+- **Module Integration** - `EventsModule` for easy setup
+- **Service Injection** - Injectable services for publishing and consuming
+- **Decorator Support** - Decorators for automatic handler registration
+- **Dependency Injection** - Full NestJS DI integration
+- **Lifecycle Hooks** - Integration with NestJS lifecycle
+
+## Configuration
+
+### Basic Configuration
+
+```typescript
+EventsModule.forRoot({
+  service: 'my-app',           // Service name for event routing
+  originPrefix: 'my-app',      // Origin prefix for events
+  autoDiscovery: true,         // Enable automatic handler discovery
+  global: true                 // Make module globally available
+})
 ```
 
 ### Advanced Configuration
 
 ```typescript
-import { Module } from '@nestjs/common';
-import { EventsModule } from '@logistically/events-nestjs';
-import { RedisStreamsPlugin } from '@logistically/events';
+import { RedisStreamsPlugin, MemoryTransportPlugin } from '@logistically/events';
 
-@Module({
-  imports: [
-    EventsModule.forRoot({
-      service: 'user-service',
-      originPrefix: 'eu.de',
-      transports: new Map([
-        ['redis', new RedisStreamsPlugin().createTransport({
-          url: 'redis://localhost:6379',
-          groupId: 'user-service-group',
-          batchSize: 100,
-          enableDLQ: true,
-          dlqStreamPrefix: 'dlq:',
-          maxRetries: 3
-        })]
-      ]),
-      // Enable publisher batching for high throughput
-      publisher: {
-        batching: {
-          enabled: true,
-          maxSize: 1000,
-          maxWaitMs: 100,
-          maxConcurrentBatches: 5,
-          strategy: 'size'          // Options: 'size', 'time', 'partition'
-        },
-        retry: {
-          maxRetries: 3,
-          backoffStrategy: 'exponential',
-          baseDelay: 1000,
-          maxDelay: 10000
-        }
-      },
-      // Enable consumer features
-      consumer: {
-        enablePatternRouting: true,
-        enableConsumerGroups: true,
-        validationMode: 'warn'
-      },
-      validationMode: 'strict',
-      autoDiscovery: true,
-      global: true
-    })
-  ]
+EventsModule.forRoot({
+  service: 'my-app',
+  originPrefix: 'my-app',
+  autoDiscovery: true,
+  global: true,
+  
+  // Transport configuration
+  transports: new Map([
+    ['redis', new RedisStreamsPlugin().createTransport({
+      url: 'redis://localhost:6379',
+      groupId: 'my-app-group'
+    })],
+    ['memory', new MemoryTransportPlugin().createTransport()]
+  ]),
+  
+  // Event routing
+  routing: {
+    routes: [
+      { pattern: 'user.*', transport: 'redis' },
+      { pattern: 'order.*', transport: 'redis' },
+      { pattern: 'system.*', transport: 'memory' }
+    ]
+  },
+  
+  // Publisher configuration
+  publisher: {
+    batching: {
+      enabled: true,
+      maxSize: 1000,
+      maxWaitMs: 100
+    }
+  },
+  
+  // Consumer configuration
+  consumer: {
+    enablePatternRouting: true,
+    enableConsumerGroups: true
+  }
 })
-export class AppModule {}
 ```
 
-## 🔧 API Reference
+For complete configuration options, see [@logistically/events Configuration](https://github.com/onwello/events/).
+
+## API Reference
 
 ### Decorators
 
-#### `@EventHandler(options)`
-Registers a method as an event handler.
+#### `@AutoEvents(options?)`
+
+Marks a service for automatic event handler discovery.
 
 ```typescript
-@EventHandler({ 
-  eventType: 'user.created',
-  priority: 1,
-  async: true,
-  retry: {
-    maxAttempts: 3,
-    backoffMs: 1000
-  }
-})
-async handleUserCreated(event: any): Promise<void> {
-  // Handle the event
+@AutoEvents({ enabled: true, priority: 0 })
+export class MyService {}
+```
+
+**Options:**
+- `enabled` (boolean): Enable/disable auto-discovery for this service
+- `priority` (number): Priority for handler registration order
+
+#### `@AutoEventHandler(options)`
+
+Marks a method as an event handler.
+
+```typescript
+@AutoEventHandler({ eventType: 'user.created' })
+async handleUserCreated(event: NestJSEvent<User>) {
+  // Handle event
 }
 ```
 
-#### `@EventPublisher(options)`
-Marks a method as an event publisher.
-
-```typescript
-@EventPublisher({ 
-  eventType: 'user.created',
-  waitForPublish: true
-})
-async createUser(data: any): Promise<void> {
-  // Method logic
-}
-```
-
-#### `@EventSubscriber(options)`
-Registers a method as an event subscriber.
-
-```typescript
-@EventSubscriber({ 
-  eventType: 'user.*',
-  subscriptionOptions: {
-    groupId: 'email-service',
-    pattern: true
-  }
-})
-async handleUserEvents(event: any): Promise<void> {
-  // Handle user events
-}
-```
+**Options:**
+- `eventType` (string): Event type pattern (supports wildcards like `user.*`)
+- `priority` (number): Handler priority within the same event type
+- `async` (boolean): Whether the handler is async
+- `retry` (object): Retry configuration
 
 ### Services
 
 #### `EventPublisherService`
-Service for publishing events.
+
+Publishes events to the event system.
 
 ```typescript
 constructor(private readonly eventPublisher: EventPublisherService) {}
 
-// Publish a single event
-await this.eventPublisher.publish('user.created', { userId: '123' });
+// Publish single event
+await this.eventPublisher.publish('user.created', userData);
 
-// Publish a batch of events
+// Publish batch
 await this.eventPublisher.publishBatch('user.created', users);
-
-// Publish a NestJS event
-await this.eventPublisher.publishEvent(event);
 ```
 
 #### `EventConsumerService`
-Service for consuming events.
+
+Consumes events from the event system.
 
 ```typescript
 constructor(private readonly eventConsumer: EventConsumerService) {}
 
-// Subscribe to an event type
+// Subscribe to specific event
 await this.eventConsumer.subscribe('user.created', handler);
 
-// Subscribe to a pattern
+// Subscribe to pattern
 await this.eventConsumer.subscribePattern('user.*', handler);
 ```
 
 #### `EventSystemService`
-Service for managing the core event system.
+
+Manages the core event system.
 
 ```typescript
 constructor(private readonly eventSystem: EventSystemService) {}
@@ -847,255 +244,268 @@ const status = await this.eventSystem.getStatus();
 const connected = this.eventSystem.isConnected();
 ```
 
-### Utilities
+#### `EventDiscoveryService`
 
-#### `EventUtils`
-Utility functions for working with events.
+Manages automatic event handler discovery and registration.
 
 ```typescript
-import { EventUtils } from '@logistically/events-nestjs';
+constructor(private readonly eventDiscoveryService: EventDiscoveryService) {}
 
-// Create an event
-const event = EventUtils.createEvent('user.created', data, 'user-service');
-
-// Create a domain event
-const domainEvent = EventUtils.createDomainEvent(
-  'user.created', 
-  data, 
-  'user-service', 
-  'user-123', 
-  1
-);
-
-// Generate correlation ID
-const correlationId = EventUtils.generateCorrelationId();
-
-// Create event batch
-const events = EventUtils.createEventBatch(eventData, 'user-service');
+// Manual registration
+const count = await this.eventDiscoveryService.registerEventHandlers(this);
 ```
 
-## 🧪 Testing
+### Event Object
 
-For testing, use the Memory Transport plugin:
+#### `NestJSEvent<T>`
+
+The event object passed to handlers.
+
+```typescript
+interface NestJSEvent<T> {
+  body: T;                    // Event payload
+  metadata: {                 // Event metadata
+    eventType: string;
+    timestamp: Date;
+    origin: string;
+    correlationId?: string;
+  };
+  headers?: Record<string, any>; // Custom headers
+}
+```
+
+## Transport Plugins
+
+### Redis Streams
+
+```typescript
+import { RedisStreamsPlugin } from '@logistically/events';
+
+const redisTransport = new RedisStreamsPlugin().createTransport({
+  url: 'redis://localhost:6379',
+  groupId: 'my-app-group',
+  batchSize: 100,
+  enableDLQ: true,
+  maxRetries: 3
+});
+```
+
+### Memory Transport
 
 ```typescript
 import { MemoryTransportPlugin } from '@logistically/events';
 
-@Module({
-  imports: [
-    EventsModule.forRoot({
-      service: 'test-service',
-      transports: new Map([
-        ['memory', new MemoryTransportPlugin().createTransport({})]
-      ]),
-      validationMode: 'warn'
-    })
-  ]
-})
-export class TestModule {}
+const memoryTransport = new MemoryTransportPlugin().createTransport();
 ```
 
-## 🌍 Environment Variables
+For complete transport configuration options, see [@logistically/events Transports](https://github.com/onwello/events/).
 
-The package supports extensive environment variable configuration. Here are the key variables:
+## Event Routing
 
-### Required Variables
-- `SERVICE_NAME` - Your service name
-- `REDIS_URL` - Redis connection URL
-
-### Optional Variables with Defaults
-```bash
-# Core configuration
-EVENTS_ORIGIN_PREFIX=eu.de
-EVENTS_VALIDATION_MODE=warn
-EVENTS_GLOBAL=true
-EVENTS_AUTO_DISCOVERY=true
-
-# Publisher configuration
-EVENTS_BATCHING_ENABLED=true
-EVENTS_BATCHING_MAX_SIZE=1000
-EVENTS_BATCHING_MAX_WAIT_MS=100
-EVENTS_RETRY_MAX_ATTEMPTS=3
-
-# Consumer configuration
-EVENTS_PATTERN_ROUTING=false
-EVENTS_CONSUMER_GROUPS=true
-
-# Redis transport
-REDIS_GROUP_ID=nestjs-group
-REDIS_BATCH_SIZE=100
-REDIS_ENABLE_DLQ=true
-REDIS_ENABLE_PARTITIONING=true
-REDIS_PARTITION_COUNT=8
-
-# Redis Advanced Features
-REDIS_ENABLE_ORDERING=true
-REDIS_ENABLE_SCHEMA_MANAGEMENT=true
-REDIS_ENABLE_MESSAGE_REPLAY=true
-REDIS_ENABLE_CLUSTER_MODE=false
-REDIS_ENABLE_SENTINEL_MODE=false
-REDIS_CLUSTER_NODES=redis-cluster-1:7000,redis-cluster-2:7000,redis-cluster-3:7000
-REDIS_SENTINEL_NODES=sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
-REDIS_SENTINEL_NAME=mymaster
-```
-
-### Using Environment Variables
+### Pattern-Based Routing
 
 ```typescript
-// Set environment variables
-process.env.SERVICE_NAME = 'user-service';
-process.env.REDIS_URL = 'redis://localhost:6379';
-process.env.EVENTS_VALIDATION_MODE = 'strict';
+routing: {
+  routes: [
+    { pattern: 'user.*', transport: 'redis' },      // All user events to Redis
+    { pattern: 'order.created', transport: 'redis' }, // Specific event to Redis
+    { pattern: 'system.*', transport: 'memory' }     // System events to memory
+  ]
+}
+```
 
-// The module will automatically use these values
+### Wildcard Support
+
+- `user.*` - All user events
+- `order.*.created` - Order events ending with 'created'
+- `*.notification` - All notification events
+
+For advanced routing configuration, see [@logistically/events Routing](https://github.com/onwello/events/).
+
+## Performance & Benchmarks
+
+For detailed performance metrics, benchmarks, and optimization strategies, see [@logistically/events Performance](https://github.com/onwello/events/).
+
+## Error Handling
+
+### Handler Error Handling
+
+```typescript
+@AutoEventHandler({ eventType: 'user.created' })
+async handleUserCreated(event: NestJSEvent<User>) {
+  try {
+    // Your logic here
+  } catch (error) {
+    // Handle errors - they won't break the event system
+    console.error('Handler error:', error);
+  }
+}
+```
+
+### Dead Letter Queue (Redis)
+
+```typescript
+const redisTransport = new RedisStreamsPlugin().createTransport({
+  enableDLQ: true,
+  dlqStreamPrefix: 'dlq:',
+  maxRetries: 3
+});
+```
+
+For comprehensive error handling strategies, see [@logistically/events Error Handling](https://github.com/onwello/events/).
+
+## Testing
+
+### Unit Testing
+
+```typescript
+import { Test } from '@nestjs/testing';
+import { EventsModule } from '@logistically/events-nestjs';
+
+describe('UserService', () => {
+  let service: UserService;
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      imports: [
+        EventsModule.forRoot({
+          service: 'test',
+          autoDiscovery: true
+        })
+      ],
+      providers: [UserService]
+    }).compile();
+
+    service = module.get<UserService>(UserService);
+  });
+
+  it('should handle user created events', async () => {
+    // Test your event handler
+  });
+});
+```
+
+### Integration Testing
+
+```typescript
+import { Test } from '@nestjs/testing';
+import { EventsModule } from '@logistically/events-nestjs';
+
+describe('Event Integration', () => {
+  let app: INestApplication;
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      imports: [
+        EventsModule.forRoot({
+          service: 'test',
+          autoDiscovery: true,
+          transports: new Map([
+            ['memory', new MemoryTransportPlugin().createTransport()]
+          ])
+        })
+      ]
+    }).compile();
+
+    app = module.createNestApplication();
+    await app.init();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+});
+```
+
+## Migration Guide
+
+### From Manual Registration
+
+**Before:**
+```typescript
+export class UserService implements OnModuleInit {
+  constructor(private readonly eventDiscoveryService: EventDiscoveryService) {}
+
+  async onModuleInit() {
+    await this.eventDiscoveryService.registerEventHandlers(this);
+  }
+}
+```
+
+**After:**
+```typescript
+@AutoEvents()
+export class UserService {
+  // No manual registration needed!
+}
+```
+
+### From Base Classes
+
+**Before:**
+```typescript
+export class UserService extends AutoEventsBase {
+  // Inherits registration logic
+}
+```
+
+**After:**
+```typescript
+@AutoEvents()
+export class UserService {
+  // Clean, inheritance-free approach
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Handlers Not Being Registered
+
+1. Ensure `autoDiscovery: true` is set in module configuration
+2. Verify the service has the `@AutoEvents()` decorator
+3. Check that `EventDiscoveryService` is injected into the service
+4. Verify event handler methods have the `@AutoEventHandler()` decorator
+
+#### Events Not Being Received
+
+1. Check transport configuration
+2. Verify event routing patterns
+3. Ensure consumer is properly initialized
+4. Check Redis connection (if using Redis transport)
+
+#### Performance Issues
+
+1. Enable batching in publisher configuration
+2. Adjust batch sizes and timing
+3. Use appropriate transport for event volume
+4. Monitor memory usage and adjust accordingly
+
+For detailed troubleshooting and performance optimization, see [@logistically/events Troubleshooting](https://github.com/onwello/events/).
+
+### Debug Mode
+
+Enable debug logging:
+
+```typescript
 EventsModule.forRoot({
-  transports: new Map([...])
+  service: 'my-app',
+  autoDiscovery: true,
+  debug: true  // Enable debug logging
 })
 ```
 
-## 📚 Examples
+## Examples
 
 See the `examples/` directory for complete working examples:
 
-- `user-service.example.ts` - Complete user service with events
-- `app.module.example.ts` - Module configuration examples
+- **Basic Setup** - Simple event handler registration
+- **Cross-Service Communication** - Services handling events from other services
+- **Pattern-Based Routing** - Event routing between transports
+- **Redis Integration** - Production-ready Redis Streams setup
 
-## 🏭 Production Best Practices
-
-### High Availability Configuration
-```typescript
-// Redis Cluster configuration for high availability
-EventsModule.forRoot({
-  service: process.env.SERVICE_NAME,
-  transports: new Map([
-    ['redis', new RedisStreamsPlugin().createTransport({
-      // Cluster mode
-      clusterNodes: process.env.REDIS_CLUSTER_NODES?.split(',').map(node => {
-        const [host, port] = node.split(':');
-        return { host, port: parseInt(port) };
-      }),
-      enableFailover: true,
-      failoverRecovery: {
-        enabled: true,
-        maxRetries: 3,
-        retryDelay: 1000
-      },
-      
-      // Or Sentinel mode
-      // sentinels: process.env.REDIS_SENTINEL_NODES?.split(',').map(node => {
-      //   const [host, port] = node.split(':');
-      //   return { host, port: parseInt(port) };
-      // }),
-      // sentinelName: process.env.REDIS_SENTINEL_NAME || 'mymaster',
-      
-      // Common settings
-      groupId: `${process.env.SERVICE_NAME}-group`,
-      enableDLQ: true,
-      enablePartitioning: true,
-      partitionCount: 8
-    })]
-  ])
-})
-```
-
-### Configuration Recommendations
-```typescript
-// Production-ready configuration
-EventsModule.forRoot({
-  service: process.env.SERVICE_NAME,
-  validationMode: 'strict',        // Strict validation in production
-  global: true,                    // Global module for app-wide access
-  
-  // High-availability Redis configuration
-  transports: new Map([
-    ['redis', new RedisStreamsPlugin().createTransport({
-      url: process.env.REDIS_URL,
-      groupId: `${process.env.SERVICE_NAME}-group`,
-      enableDLQ: true,             // Always enable DLQ in production
-      enablePartitioning: true,    // Enable partitioning for scalability
-      partitionCount: 8,           // Adjust based on expected load
-      maxRetries: 3,
-      
-      // Advanced features for production
-      ordering: {
-        enabled: true,
-        strategy: 'partition',      // Maintain order within partitions
-        enableCausalDependencies: true
-      },
-      partitioning: {
-        strategy: 'hash',           // Consistent hashing for even distribution
-        autoScaling: true          // Auto-scale based on load
-      },
-      schema: {
-        enabled: true,
-        validationMode: 'strict',
-        enableSchemaEvolution: true
-      },
-      replay: {
-        enabled: true,
-        maxReplaySize: 10000
-      }
-    })]
-  ]),
-  
-  // Publisher optimization
-  publisher: {
-    batching: {
-      enabled: true,
-      maxSize: 1000,
-      maxWaitMs: 100,
-      strategy: 'size'              // Options: 'size', 'time', 'partition'
-    },
-    retry: {
-      maxRetries: 3,
-      backoffStrategy: 'exponential',
-      baseDelay: 1000
-    }
-  },
-  
-  // Consumer optimization
-  consumer: {
-    enableConsumerGroups: true,
-    enablePatternRouting: true,
-    validationMode: 'strict'
-  }
-})
-```
-
-### Performance Tuning
-Advanced performance optimization strategies:
-
-- **Batching Strategies**: Choose between size, time, or partition-based batching
-- **Partitioning**: Use hash-based, round-robin, or dynamic load-based partitioning
-- **Consumer Scaling**: Scale consumers based on partition count and load
-- **Memory Management**: Monitor memory usage and adjust batch sizes accordingly
-- **Redis Optimization**: Enable pipelining, connection pooling, and failover handling
-
-**Partitioning Strategies:**
-- **Hash-based**: Consistent hashing for even distribution (recommended)
-- **Round-robin**: Sequential distribution across partitions
-- **Dynamic**: Auto-balance based on partition load
-- **Key-based**: Partition by specific message properties
-
-**Redis Performance:**
-- **Pipelining**: Enable for batch operations
-- **Connection Pooling**: Optimize connection management
-- **Failover**: Automatic failover and recovery
-- **Cluster Sharding**: Distribute load across cluster nodes
-
-### Monitoring & Alerting
-- Set up alerts for high error rates (>1% failure rate)
-- Monitor consumer lag and alert if lag exceeds thresholds
-- Track throughput metrics and scale partitions when approaching limits
-- Set up health check endpoints for load balancer integration
-
-### Security Considerations
-- Use Redis ACLs to restrict access to event streams
-- Implement proper authentication for Redis connections
-- Consider encrypting sensitive event payloads
-- Use environment variables for all configuration secrets
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -1103,12 +513,12 @@ Advanced performance optimization strategies:
 4. Add tests
 5. Submit a pull request
 
-## 📄 License
+## License
 
 MIT License - see LICENSE file for details.
 
-## 🔗 Links
+## Related Links
 
-- [@logistically/events](https://github.com/onwello/events) - Core events library
+- [@logistically/events](https://github.com/onwello/events/) - Core events library with detailed configuration, features, and benchmarks
 - [NestJS](https://nestjs.com/) - Progressive Node.js framework
 - [Redis](https://redis.io/) - In-memory data structure store

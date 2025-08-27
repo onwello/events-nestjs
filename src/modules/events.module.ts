@@ -6,6 +6,10 @@ import { EventConsumerService } from '../services/event-consumer.service';
 import { EventHandlerRegistryService } from '../services/event-handler-registry.service';
 import { AutoEventHandlerService } from '../services/auto-event-handler.service';
 import { EventDiscoveryService } from '../services/event-discovery.service';
+import { EventMetadataExplorer } from '../services/event-metadata-explorer.service';
+import { EventListenersController } from '../services/event-listeners-controller.service';
+import { EventModuleScanner } from '../services/event-module-scanner.service';
+import { AutoRegistrationTriggerService } from '../services/auto-registration-trigger.service';
 import { GlobalEventHandlerService } from '../services/global-event-handler.service';
 import { SimpleEventHandlerService } from '../services/simple-event-handler.service';
 import { ConfigFactory } from '../utils/config.factory';
@@ -18,7 +22,7 @@ export class EventsModule {
     const config = ConfigFactory.mergeWithDefaults(options);
     ConfigValidator.validateAll(config);
 
-    const providers: Provider[] = [
+    const baseProviders: Provider[] = [
       {
         provide: 'EVENTS_CONFIG',
         useValue: config,
@@ -34,23 +38,41 @@ export class EventsModule {
       SimpleEventHandlerService,
     ];
 
-    // Note: EnterpriseEventRegistrationService requires DiscoveryService and MetadataScanner
-    // which are NestJS internal services. It's available but requires manual setup
-    // in the root module where these services are available.
+    // Only add automatic discovery services if autoDiscovery is enabled
+    const autoDiscoveryProviders: Provider[] = config.autoDiscovery ? [
+      EventMetadataExplorer,
+      EventListenersController,
+      EventModuleScanner,
+      AutoRegistrationTriggerService,
+    ] : [];
+
+    const providers = [...baseProviders, ...autoDiscoveryProviders];
+
+    const baseExports = [
+      EventSystemService,
+      EventPublisherService,
+      EventConsumerService,
+      EventHandlerRegistryService,
+      AutoEventHandlerService,
+      EventDiscoveryService,
+      GlobalEventHandlerService,
+      SimpleEventHandlerService,
+    ];
+
+    // Only export automatic discovery services if autoDiscovery is enabled
+    const autoDiscoveryExports = config.autoDiscovery ? [
+      EventMetadataExplorer,
+      EventListenersController,
+      EventModuleScanner,
+      AutoRegistrationTriggerService,
+    ] : [];
+
+    const exports = [...baseExports, ...autoDiscoveryExports];
 
     return {
       module: EventsModule,
       providers,
-      exports: [
-        EventSystemService,
-        EventPublisherService,
-        EventConsumerService,
-        EventHandlerRegistryService,
-        AutoEventHandlerService,
-        EventDiscoveryService,
-        GlobalEventHandlerService,
-        SimpleEventHandlerService,
-      ],
+      exports,
       global: config.global || false,
     };
   }

@@ -220,6 +220,7 @@ describe('EventsModule', () => {
       const module = await Test.createTestingModule({
         imports: [
           EventsModule.forRoot({
+            service: 'test-service',
             transports: new Map([['memory', createMockTransport()]])
           })
         ],
@@ -286,9 +287,15 @@ describe('EventsModule', () => {
         transports: new Map([['memory', {} as any]])
       } as any);
 
-      EventsModule.forRoot();
+      EventsModule.forRoot({ 
+        service: 'test-service',
+        transports: new Map([['memory', {} as any]])
+      });
 
-      expect(mergeWithDefaultsSpy).toHaveBeenCalledWith({});
+      expect(mergeWithDefaultsSpy).toHaveBeenCalledWith({ 
+        service: 'test-service',
+        transports: new Map([['memory', {} as any]])
+      });
       mergeWithDefaultsSpy.mockRestore();
     });
   });
@@ -418,13 +425,13 @@ describe('EventsModule', () => {
     it('should verify dynamic module structure for forRoot', async () => {
       const dynamicModule = EventsModule.forRoot({
         service: 'test-service',
+        autoDiscovery: false,
         transports: new Map([['memory', createMockTransport()]])
       });
 
       expect(dynamicModule.module).toBe(EventsModule);
-      expect(dynamicModule.imports).toHaveLength(0); // No DiscoveryModule import
-      expect(dynamicModule.providers).toHaveLength(4); // EventSystemService, EventPublisherService, EventConsumerService, Reflector
-      expect(dynamicModule.exports).toHaveLength(3);
+      expect(dynamicModule.providers).toHaveLength(10); // Base providers only (no autoDiscovery providers)
+      expect(dynamicModule.exports).toHaveLength(8); // Base exports only (no autoDiscovery exports, no EVENTS_CONFIG or Reflector)
       expect(dynamicModule.global).toBe(true); // Default value
     });
 
@@ -442,14 +449,14 @@ describe('EventsModule', () => {
       const dynamicModule = EventsModule.forFeature();
 
       expect(dynamicModule.module).toBe(EventsModule);
-      expect(dynamicModule.imports).toHaveLength(0); // No DiscoveryModule import
-      expect(dynamicModule.providers).toHaveLength(2); // EventPublisherService, Reflector (no EventConsumerService in forFeature)
-      expect(dynamicModule.exports).toHaveLength(1); // Only EventPublisherService
+      expect(dynamicModule.providers).toHaveLength(5); // Reflector, EventDiscoveryService, AutoEventHandlerService, GlobalEventHandlerService, SimpleEventHandlerService
+      expect(dynamicModule.exports).toHaveLength(4); // Services only (no Reflector)
       expect(dynamicModule.global).toBeUndefined(); // forFeature doesn't set global
     });
 
     it('should create module with autoDiscovery disabled', () => {
       const dynamicModule = EventsModule.forRoot({ 
+        service: 'test-service',
         autoDiscovery: false,
         transports: new Map([
           ['memory', {
@@ -511,14 +518,14 @@ describe('EventsModule', () => {
       });
       
       expect(dynamicModule.module).toBe(EventsModule);
-      expect(dynamicModule.imports).toHaveLength(0); // No DiscoveryModule import
-      expect(dynamicModule.providers).toHaveLength(3); // EventSystemService, EventPublisherService, Reflector (no EventConsumerService)
-      expect(dynamicModule.exports).toHaveLength(2); // EventSystemService, EventPublisherService (no EventConsumerService)
+      expect(dynamicModule.providers).toHaveLength(10); // Base providers only (no autoDiscovery providers)
+      expect(dynamicModule.exports).toHaveLength(8); // Base exports only (no autoDiscovery exports, no EVENTS_CONFIG or Reflector)
       expect(dynamicModule.global).toBe(true); // Default value
     });
 
     it('should create module with autoDiscovery enabled', () => {
       const dynamicModule = EventsModule.forRoot({ 
+        service: 'test-service',
         autoDiscovery: true,
         transports: new Map([
           ['memory', {
@@ -580,9 +587,8 @@ describe('EventsModule', () => {
       });
       
       expect(dynamicModule.module).toBe(EventsModule);
-      expect(dynamicModule.imports).toHaveLength(0); // No DiscoveryModule import
-      expect(dynamicModule.providers).toHaveLength(4); // EventSystemService, EventPublisherService, EventConsumerService, Reflector
-      expect(dynamicModule.exports).toHaveLength(3); // EventSystemService, EventPublisherService, EventConsumerService
+      expect(dynamicModule.providers).toHaveLength(14); // All base providers + autoDiscovery providers
+      expect(dynamicModule.exports).toHaveLength(12); // All base exports + autoDiscovery exports (no EVENTS_CONFIG or Reflector)
       expect(dynamicModule.global).toBe(true); // Default value
     });
   });

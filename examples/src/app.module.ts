@@ -1,77 +1,64 @@
-import { Module, Global } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { EventsModule } from '@logistically/events-nestjs';
-import { MemoryTransportPlugin, RedisStreamsPlugin } from '@logistically/events';
+import { RedisStreamsPlugin } from '@logistically/events';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { HealthController } from './health/health.controller';
 
-@Global()
 @Module({
   imports: [
-    // Configure the events module with both memory and Redis transports
-    // Enable autoDiscovery to automatically discover @EventHandler decorators
     EventsModule.forRoot({
       service: 'example-app',
       originPrefix: 'example',
-      autoDiscovery: true, // Enable automatic event handler discovery
       transports: new Map([
-        // Memory transport for development/testing
-        ['memory', new MemoryTransportPlugin().createTransport({})],
-        // Redis transport for production-like testing
-        ['redis-streams', new RedisStreamsPlugin().createTransport({
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
-          password: process.env.REDIS_PASSWORD,
-          db: parseInt(process.env.REDIS_DB || '0'),
-        })]
+        ['redis', new RedisStreamsPlugin().createTransport({
+          url: 'redis://localhost:6379',
+          groupId: 'example-app-group',
+          batchSize: 100,
+          enableDLQ: true,
+          dlqStreamPrefix: 'dlq:',
+          maxRetries: 3
+        })],
+        ['memory', new (require('@logistically/events').MemoryTransportPlugin)().createTransport({})]
       ]),
-      // Routing configuration to determine which transport gets which messages
       routing: {
         routes: [
-          // Route user events to Redis for persistence
-          {
-            pattern: 'user.*',
-            transport: 'redis-streams',
-            priority: 1
-          },
-          // Route order events to Redis for persistence
-          {
-            pattern: 'order.*',
-            transport: 'redis-streams',
-            priority: 1
-          },
-          // Route all other events to memory for fast processing
-          {
-            pattern: '*',
-            transport: 'memory',
-            priority: 2
-          }
+          { pattern: 'user.*', transport: 'redis' },
+          { pattern: 'order.*', transport: 'redis' },
+          { pattern: 'system.*', transport: 'memory' }
         ],
         validationMode: 'warn',
-        originPrefix: 'example',
-        topicMapping: {
-          
-        },
-        defaultTopicStrategy: 'namespace',
-        enablePatternRouting: true,
-        enableBatching: true,
-        enablePartitioning: false,
-        enableConsumerGroups: false
+        topicMapping: {},
+        defaultTopicStrategy: 'namespace'
       },
       publisher: {
         batching: {
           enabled: true,
-          maxSize: 100,
-          strategy: 'time',
-          maxWaitMs: 1000,
-          maxConcurrentBatches: 5
+          maxSize: 1000,
+          maxWaitMs: 100,
+          maxConcurrentBatches: 5,
+          strategy: 'size'
+        },
+        retry: {
+          maxRetries: 3,
+          backoffStrategy: 'exponential',
+          baseDelay: 1000,
+          maxDelay: 10000
         }
       },
+      consumer: {
+        enablePatternRouting: true,
+        enableConsumerGroups: true,
+        validationMode: 'warn'
+      },
+      validationMode: 'strict',
+      autoDiscovery: true,
       global: true
     }),
     UsersModule,
     OrdersModule
   ],
   controllers: [HealthController],
+  providers: []
 })
 export class AppModule {}

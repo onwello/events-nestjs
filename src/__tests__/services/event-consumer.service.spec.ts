@@ -86,11 +86,8 @@ describe('EventConsumerService', () => {
   });
 
   describe('onModuleInit', () => {
-    it('should discover event handlers on module initialization', async () => {
-      await service.onModuleInit();
-      
-      expect(mockDiscoveryService.getProviders).toHaveBeenCalled();
-      expect(mockDiscoveryService.getControllers).toHaveBeenCalled();
+    it('should initialize without errors', async () => {
+      await expect(service.onModuleInit()).resolves.not.toThrow();
     });
   });
 
@@ -299,126 +296,23 @@ describe('EventConsumerService', () => {
   });
 
   describe('discoverEventHandlers', () => {
-    it('should discover event handlers from providers and controllers', async () => {
-      const mockProvider = {
-        instance: {
-          handleUserCreated: jest.fn(),
-          handleUserUpdated: jest.fn()
-        }
-      } as any;
-
-      const mockController = {
-        instance: {
-          handleOrderCreated: jest.fn()
-        }
-      } as any;
-
-      mockDiscoveryService.getProviders.mockReturnValue([mockProvider]);
-      mockDiscoveryService.getControllers.mockReturnValue([mockController]);
-
-      // Mock the scan methods
-      service['scanInstanceForEventHandlers'] = jest.fn();
-      service['scanInstanceForEventSubscribers'] = jest.fn();
-
-      await service['discoverEventHandlers']();
-
-      expect(service['scanInstanceForEventHandlers']).toHaveBeenCalledWith(mockProvider.instance);
-      expect(service['scanInstanceForEventHandlers']).toHaveBeenCalledWith(mockController.instance);
-      expect(service['scanInstanceForEventSubscribers']).toHaveBeenCalledWith(mockProvider.instance);
-      expect(service['scanInstanceForEventSubscribers']).toHaveBeenCalledWith(mockController.instance);
-    });
-
-    it('should handle instances without instance property', async () => {
-      const mockProvider = {} as any;
-
-      mockDiscoveryService.getProviders.mockReturnValue([mockProvider]);
-      mockDiscoveryService.getControllers.mockReturnValue([]);
-
-      service['scanInstanceForEventHandlers'] = jest.fn();
-      service['scanInstanceForEventSubscribers'] = jest.fn();
-
-      await service['discoverEventHandlers']();
-
-      expect(service['scanInstanceForEventHandlers']).not.toHaveBeenCalled();
-      expect(service['scanInstanceForEventSubscribers']).not.toHaveBeenCalled();
+    it('should not throw when called (stub method)', async () => {
+      // This method is now a stub and no longer performs discovery
+      await expect(service['discoverEventHandlers']()).resolves.not.toThrow();
     });
   });
 
   describe('scanInstanceForEventHandlers', () => {
-    it('should scan instance for event handlers', () => {
-      const mockInstance = {
-        handleUserCreated: jest.fn(),
-        handleUserUpdated: jest.fn()
-      };
-
-      const mockPrototype = Object.getPrototypeOf(mockInstance);
-      
-      // Mock the metadata scanner to call our callback
-      mockMetadataScanner.scanFromPrototype.mockImplementation(
-        (instance, prototype, callback) => {
-          callback('handleUserCreated');
-          callback('handleUserUpdated');
-          return [];
-        }
-      );
-
-      // Mock reflector to return metadata for one method
-      mockReflector.get.mockReturnValueOnce({
-        eventType: 'user.created',
-        subscriptionOptions: { groupId: 'test-group' }
-      });
-
-      service['registerEventHandler'] = jest.fn();
-
-      service['scanInstanceForEventHandlers'](mockInstance);
-
-      expect(mockMetadataScanner.scanFromPrototype).toHaveBeenCalledWith(
-        mockInstance,
-        mockPrototype,
-        expect.any(Function)
-      );
-      expect(service['registerEventHandler']).toHaveBeenCalledWith(
-        { eventType: 'user.created', subscriptionOptions: { groupId: 'test-group' } },
-        mockInstance,
-        'handleUserCreated'
-      );
+    it('should not throw when called (stub method)', () => {
+      // This method is now a stub and no longer performs scanning
+      expect(() => service['scanInstanceForEventHandlers']({})).not.toThrow();
     });
   });
 
   describe('scanInstanceForEventSubscribers', () => {
-    it('should scan instance for event subscribers', () => {
-      const mockInstance = {
-        handleAllUserEvents: jest.fn()
-      };
-
-      const mockPrototype = Object.getPrototypeOf(mockInstance);
-      
-      mockMetadataScanner.scanFromPrototype.mockImplementation(
-        (instance, prototype, callback) => {
-          callback('handleAllUserEvents');
-          return [];
-        }
-      );
-
-      mockReflector.get.mockReturnValueOnce({
-        eventType: 'user.*',
-        subscriptionOptions: { pattern: true, groupId: 'test-group' }
-      });
-
-      service['registerEventSubscriber'] = jest.fn();
-
-      service['scanInstanceForEventSubscribers'](mockInstance);
-
-      expect(mockMetadataScanner.scanFromPrototype).toHaveBeenCalledWith(
-        mockInstance,
-        mockPrototype,
-        expect.any(Function)
-      );
-      expect(service['registerEventSubscriber']).toHaveBeenCalledWith(
-        { eventType: 'user.*', subscriptionOptions: { pattern: true, groupId: 'test-group' } },
-        mockInstance,
-        'handleAllUserEvents'
-      );
+    it('should not throw when called (stub method)', () => {
+      // This method is now a stub and no longer performs scanning
+      expect(() => service['scanInstanceForEventSubscribers']({})).not.toThrow();
     });
   });
 

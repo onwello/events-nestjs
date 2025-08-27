@@ -1,46 +1,22 @@
-import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
-import { UsersService, User } from './users.service';
-
-export interface CreateUserDto {
-  name: string;
-  email: string;
-}
-
-export interface UpdateUserDto {
-  name: string;
-  email: string;
-}
+import { Controller, Get, Post, Body, Param, ParseIntPipe } from '@nestjs/common';
+import { UsersService } from './users.service';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  async findAll(): Promise<User[]> {
-    return this.usersService.findAll();
+  async findAll() {
+    return this.usersService.getUsers();
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string): Promise<User | undefined> {
-    return this.usersService.findOne(parseInt(id, 10));
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.getUser(id);
   }
 
   @Post()
-  async create(@Body() createUserDto: CreateUserDto): Promise<User> {
-    return this.usersService.create(createUserDto.name, createUserDto.email);
-  }
-
-  @Put(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() updateUserDto: UpdateUserDto
-  ): Promise<User | undefined> {
-    return this.usersService.update(parseInt(id, 10), updateUserDto.name, updateUserDto.email);
-  }
-
-  @Delete(':id')
-  async delete(@Param('id') id: string): Promise<{ success: boolean }> {
-    const success = await this.usersService.delete(parseInt(id, 10));
-    return { success };
+  async create(@Body() createUserDto: { email: string; name: string }) {
+    return this.usersService.createUser(createUserDto.email, createUserDto.name);
   }
 }

@@ -1,288 +1,272 @@
-# NestJS Events Example Application
+# Examples
 
-This example demonstrates how to use the `@logistically/events-nestjs` library with NestJS to implement a robust event-driven architecture.
+This directory contains working examples demonstrating how to use `@logistically/events-nestjs` in real applications.
 
-## 🚀 Features Demonstrated
+## Getting Started
 
-- **Automatic Event Handler Discovery**: Using `@AutoEventHandler` decorators
-- **Pattern-Based Event Routing**: Support for wildcard patterns like `user.*` and specific event types
-- **Full Event Envelopes**: Complete event structure with headers, body, and metadata
-- **Redis Transport Integration**: Production-ready event persistence
-- **Hybrid Transport Configuration**: Memory and Redis transports working together
-- **Event Handler Registration**: Manual registration using `EventDiscoveryService`
+### Prerequisites
 
-## 📋 Prerequisites
+- Node.js 18+
+- Redis (optional, for Redis Streams examples)
 
-- Node.js 18+ and npm
-- Redis (running via Docker or locally)
-- Basic understanding of NestJS
-
-## 🛠️ Installation
+### Installation
 
 ```bash
-# Install dependencies
+cd examples
 npm install
-
-# Build the application
-npm run build
 ```
 
-## ⚙️ Configuration
+### Running the Examples
 
-### Redis Setup
-
-The application is configured to use Redis for event persistence. Redis should be running and accessible.
-
-**Docker (Recommended):**
 ```bash
-docker run -d --name redis-shared -p 6379:6379 redis:7-alpine
+# Start the example application
+npm run start:dev
+
+# The application will be available at:
+# - Main app: http://localhost:3009
+# - Health check: http://localhost:3009/health
+# - Users API: http://localhost:3009/users
+# - Orders API: http://localhost:3009/orders
 ```
 
-**Environment Variables:**
-```bash
-# Redis connection settings (optional - defaults shown)
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DB=0
+## Example Structure
+
+### Application Architecture
+
+```
+src/
+├── app.module.ts           # Main application module with EventsModule configuration
+├── main.ts                 # Application entry point
+├── health/                 # Health check controller
+│   └── health.controller.ts
+├── users/                  # User management module
+│   ├── users.module.ts     # User module configuration
+│   ├── users.service.ts    # User service with event handlers
+│   └── users.controller.ts # User REST API
+└── orders/                 # Order management module
+    ├── orders.module.ts    # Order module configuration
+    ├── orders.service.ts   # Order service with event handlers
+    └── orders.controller.ts # Order REST API
 ```
 
-### Application Configuration
+### Key Features Demonstrated
 
-The main configuration is in `src/app.module.ts`:
+1. **Automatic Event Handler Discovery** - Services automatically register their event handlers
+2. **Cross-Service Event Handling** - Services can handle events from other services
+3. **Pattern-Based Event Routing** - Events routed to appropriate transports
+4. **Multiple Transport Support** - Redis Streams and Memory transport examples
+5. **Event Publishing** - Services publish events during business operations
+
+## Example Services
+
+### User Service
+
+The `UserService` demonstrates:
+
+- **Event Handler Registration**: Automatically registers handlers using `@AutoEvents()`
+- **User Creation Events**: Publishes `user.registered` events when users are created
+- **Cross-Service Event Handling**: Handles order-related events from other services
+
+```typescript
+@Injectable()
+@AutoEvents()
+export class UsersService {
+  @AutoEventHandler({ eventType: 'user.registered' })
+  async handleUserRegistered(event: NestJSEvent<User>) {
+    // Handle user registration events
+  }
+
+  @AutoEventHandler({ eventType: 'order.created' })
+  async handleOrderCreated(event: NestJSEvent<Order>) {
+    // Handle order creation events
+  }
+}
+```
+
+### Order Service
+
+The `OrderService` demonstrates:
+
+- **Event Publishing**: Publishes `order.created` events when orders are created
+- **Event Handler Registration**: Automatically registers order-related handlers
+- **Business Logic Integration**: Events published as part of business operations
+
+```typescript
+@Injectable()
+@AutoEvents()
+export class OrdersService {
+  async createOrder(userId: number, items: string[], total: number) {
+    // Business logic
+    const order = { /* order data */ };
+    
+    // Publish event
+    await this.eventPublisher.publish('order.created', order);
+    
+    return order;
+  }
+}
+```
+
+## Configuration Examples
+
+### Basic Configuration
 
 ```typescript
 EventsModule.forRoot({
   service: 'example-app',
   originPrefix: 'example',
-  autoDiscovery: true, // Enable automatic event handler discovery
-  transports: new Map([
-    // Redis transport for production-like testing
-    ['redis-streams', new RedisStreamsPlugin().createTransport({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
-      db: parseInt(process.env.REDIS_DB || '0'),
-    })]
-  ]),
-  // Routing configuration to determine which transport gets which messages
-  routing: {
-    routes: [
-      // Route user events to Redis for persistence
-      {
-        pattern: 'user.*',
-        transport: 'redis-streams',
-        priority: 1
-      },
-      // Route order events to Redis for persistence
-      {
-        pattern: 'order.*',
-        transport: 'redis-streams',
-        priority: 1
-      }
-    ],
-    validationMode: 'warn',
-    originPrefix: 'example',
-    topicMapping: {
-      'user.*': 'user-events',
-      'order.*': 'order-events'
-    },
-    defaultTopicStrategy: 'namespace',
-    enablePatternRouting: true,
-    enableBatching: true,
-    enablePartitioning: false,
-    enableConsumerGroups: false
-  },
-  publisher: {
-    batching: {
-      enabled: true,
-      maxSize: 100,
-      strategy: 'time',
-      maxWaitMs: 1000,
-      maxConcurrentBatches: 5
-    }
-  },
+  autoDiscovery: true,
   global: true
 })
 ```
 
-#### Event Routing Configuration
-
-The `routing` configuration determines which transport gets which messages using pattern-based routing:
-
-- **User Events** (`user.*`): Routed to Redis for persistence
-- **Order Events** (`order.*`): Routed to Redis for persistence
-
-**Routing Configuration Features:**
-- **Pattern Matching**: Uses wildcard patterns (`user.*`, `order.*`)
-- **Transport Selection**: Routes events to specific transports based on patterns
-- **Priority System**: Higher priority routes are evaluated first
-- **Topic Mapping**: Maps patterns to specific topics for organization
-
-**Topic Organization:**
-- `user-events`: All user-related events
-- `order-events`: All order-related events
-
-This allows you to:
-- ✅ **Persist Important Events**: User and order events are stored in Redis
-- ✅ **Topic Organization**: Events are organized into logical topics
-- ✅ **Pattern-Based Routing**: Flexible event routing with wildcard patterns
-
-## 🏃‍♂️ Running the Application
-
-```bash
-# Start the development server
-npm run start:dev
-```
-
-The application will start on `http://localhost:3009`.
-
-## 🧪 Testing
-
-### 1. Event Consumption Test
-
-Test that events are being published and consumed correctly:
-
-```bash
-node test-event-consumption.js
-```
-
-**Expected Output:**
-```
-✅ User created: { id: 3, name: 'Event Test User', email: 'eventtest@example.com' }
-✅ Order created: { id: 3, userId: 3, items: ['Event Test Item'], total: 199.99, status: 'pending' }
-✅ User updated: { id: 3, name: 'Updated Event Test User', email: 'eventtest@example.com' }
-✅ User deleted
-```
-
-**Check Server Logs For:**
-- "All user events received" (from pattern handler)
-- "User updated event received" (from specific handler)
-- "Order created event received" (from specific handler)
-
-### 2. Redis Transport Test
-
-Test that events are being persisted in Redis:
-
-```bash
-node test-redis.js
-```
-
-**Verify Redis Storage:**
-```bash
-# Check if events are stored in Redis
-docker exec redis-shared redis-cli xlen user-events
-docker exec redis-shared redis-cli xlen order-events
-```
-
-## 📊 API Endpoints
-
-### Users API
-
-- `POST /users` - Create a user (triggers `user.created`)
-- `GET /users` - Get all users
-- `GET /users/:id` - Get user by ID
-- `PUT /users/:id` - Update user (triggers `user.updated`)
-- `DELETE /users/:id` - Delete user (triggers `user.deleted`)
-
-### Orders API
-
-- `POST /orders` - Create an order (triggers `order.created`)
-- `GET /orders` - Get all orders
-- `GET /orders/:id` - Get order by ID
-- `PUT /orders/:id/status` - Update order status (triggers `order.updated`)
-
-### Health Check
-
-- `GET /health` - Application health status
-
-## 🔧 Event Handler Implementation
-
-### Automatic Event Handler Discovery
-
-The `OrdersService` demonstrates automatic event handler discovery:
+### Advanced Configuration with Redis
 
 ```typescript
-@Injectable()
-export class OrdersService implements OnModuleInit {
-  constructor(
-    private readonly eventPublisher: EventPublisherService,
-    private readonly eventDiscoveryService: EventDiscoveryService,
-  ) {}
-
-  async onModuleInit() {
-    // Register event handlers automatically
-    await this.eventDiscoveryService.registerEventHandlers(this);
+EventsModule.forRoot({
+  service: 'example-app',
+  originPrefix: 'example',
+  autoDiscovery: true,
+  global: true,
+  
+  transports: new Map([
+    ['redis', new RedisStreamsPlugin().createTransport({
+      url: 'redis://localhost:6379',
+      groupId: 'example-app-group',
+      batchSize: 100,
+      enableDLQ: true,
+      maxRetries: 3
+    })],
+    ['memory', new MemoryTransportPlugin().createTransport()]
+  ]),
+  
+  routing: {
+    routes: [
+      { pattern: 'user.*', transport: 'redis' },
+      { pattern: 'order.*', transport: 'redis' },
+      { pattern: 'system.*', transport: 'memory' }
+    ]
   }
-
-  // Pattern-based handler for all user events
-  @AutoEventHandler({ eventType: 'user.*' })
-  async handleAllUserEvents(event: NestJSEvent<any>) {
-    this.logger.log(`All user events received: ${JSON.stringify(event)}`);
-  }
-
-  // Specific handler for user updates
-  @AutoEventHandler({ eventType: 'user.updated' })
-  async handleUserUpdated(event: NestJSEvent<any>) {
-    this.logger.log(`User updated event received: ${JSON.stringify(event)}`);
-  }
-
-  // Specific handler for order creation
-  @AutoEventHandler({ eventType: 'order.created' })
-  async handleOrderCreated(event: NestJSEvent<any>) {
-    this.logger.log(`Order created event received: ${JSON.stringify(event)}`);
-  }
-}
+})
 ```
 
-### Event Structure
+## Testing the Examples
 
-Events are published as complete envelopes with full metadata:
+### Create a User
+
+```bash
+curl -X POST http://localhost:3009/users \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "name": "Test User"}'
+```
+
+**Expected Result**: User created and `user.registered` event published
+
+### Create an Order
+
+```bash
+curl -X POST http://localhost:3009/orders \
+  -H "Content-Type: application/json" \
+  -d '{"userId": 1, "items": ["Laptop"], "total": 999.99}'
+```
+
+**Expected Result**: Order created and `order.created` event published
+
+### View Data
+
+```bash
+# Get all users
+curl http://localhost:3009/users
+
+# Get all orders
+curl http://localhost:3009/orders
+```
+
+## Event Flow
+
+1. **User Creation**: `POST /users` → `user.registered` event published
+2. **Order Creation**: `POST /orders` → `order.created` event published
+3. **Event Handling**: Both services automatically handle relevant events
+4. **Cross-Service Communication**: Services react to events from other services
+
+## Monitoring and Debugging
+
+### Enable Debug Logging
 
 ```typescript
-{
-  "header": {
-    "id": "fb55637c-4c8c-4781-8700-5237fecc0dc2",
-    "type": "user.created",
-    "origin": "example-app",
-    "originPrefix": "example",
-    "timestamp": "2025-08-27T15:46:50.397Z",
-    "hash": "873f6c9553a92b3c3a2d9531666a00e2c4be6dfa3c077180fc6784ab0c6ff6a6",
-    "version": "1.0.0"
-  },
-  "body": {
-    "user": {
-      "id": 3,
-      "name": "Event Test User",
-      "email": "eventtest@example.com"
-    },
-    "timestamp": "2025-08-27T15:46:50.397Z"
-  }
-}
+EventsModule.forRoot({
+  // ... other config
+  debug: true
+})
 ```
 
-## 🎯 Key Features
+### Check Event Handler Registration
 
-1. **Automatic Discovery**: Event handlers are automatically discovered and registered
-2. **Pattern Routing**: Support for wildcard patterns (`user.*`, `order.*`)
-3. **Full Event Envelopes**: Complete event structure with headers and metadata
-4. **Redis Persistence**: Events are stored in Redis for durability
-5. **Topic Organization**: Events are organized into logical topics
-6. **Batching Support**: Publisher batching for improved performance
-7. **Error Handling**: Comprehensive error handling and logging
+Look for logs like:
+```
+[EventDiscoveryService] Registered auto event handler: UsersService.handleUserRegistered for user.registered
+[EventDiscoveryService] Registered auto event handler: OrdersService.handleOrderCreated for order.created
+```
 
-## 📝 Notes
+### Verify Event Consumption
 
-- **Transport Names**: Use `'redis-streams'` as the transport name for Redis
-- **Pattern Matching**: Wildcard patterns work for both publishing and subscribing
-- **Event Handlers**: Receive complete event envelopes, not just the body
-- **Topic Mapping**: Optional but recommended for organization
-- **Priority Routing**: Higher priority routes are evaluated first
+Look for logs like:
+```
+🎉 Auto-handler: User registered event received: {...}
+🎉 Auto-handler: Order created event received: {...}
+```
 
-## 🚀 Production Considerations
+## Customization
 
-- **Redis Configuration**: Configure Redis with appropriate persistence settings
-- **Monitoring**: Add monitoring for event processing and Redis performance
-- **Scaling**: Consider Redis clustering for high-throughput scenarios
-- **Security**: Implement proper authentication and authorization
-- **Backup**: Set up Redis backup and recovery procedures
+### Adding New Event Types
+
+1. **Define the event type** in your service
+2. **Add the handler** with `@AutoEventHandler()`
+3. **Publish the event** using `EventPublisherService`
+
+### Adding New Services
+
+1. **Create the service** with `@AutoEvents()` decorator
+2. **Inject EventDiscoveryService** for automatic registration
+3. **Add event handlers** as needed
+4. **Register in your module**
+
+### Custom Transport Configuration
+
+```typescript
+const customTransport = new CustomTransportPlugin().createTransport({
+  // Your custom configuration
+});
+
+transports: new Map([
+  ['custom', customTransport]
+])
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Handlers not registered**: Check `@AutoEvents()` decorator and `EventDiscoveryService` injection
+2. **Events not received**: Verify transport configuration and event routing
+3. **Redis connection issues**: Check Redis server status and connection parameters
+
+### Debug Steps
+
+1. Enable debug logging
+2. Check service initialization logs
+3. Verify event handler registration
+4. Test event publishing and consumption
+5. Check transport-specific logs
+
+## Next Steps
+
+After running these examples:
+
+1. **Explore the code** to understand the implementation
+2. **Modify the examples** to test different scenarios
+3. **Add your own services** with event handlers
+4. **Configure Redis** for production-like testing
+5. **Implement your own event types** and handlers
+
+For more information, see the main [README.md](../README.md) and [Quick Start Guide](../QUICKSTART.md).

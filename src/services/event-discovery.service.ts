@@ -1,12 +1,17 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { Reflector, MetadataScanner } from '@nestjs/core';
 import { EventSystemService } from './event-system.service';
 import { AUTO_EVENT_HANDLER_METADATA, getAutoEventHandlerMetadata } from '../decorators/auto-event-handler.decorator';
+import { AUTO_REGISTER_EVENTS_METADATA, AutoRegisterEventsOptions } from '../decorators/auto-events.decorator';
 
 @Injectable()
 export class EventDiscoveryService implements OnModuleInit {
   private readonly logger = new Logger(EventDiscoveryService.name);
+  private readonly metadataScanner = new MetadataScanner();
   private consumer: any = null;
+  private autoRegisteredServices: Set<any> = new Set();
+  private discoveryQueue: Array<{ instance: any; timestamp: number }> = [];
+  private isInitialized = false;
 
   constructor(
     private readonly eventSystemService: EventSystemService,
@@ -15,7 +20,107 @@ export class EventDiscoveryService implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log('EventDiscoveryService onModuleInit called');
-    // Don't initialize consumer here - wait until it's actually needed
+    
+    // Start the discovery loop
+    this.startDiscoveryLoop();
+  }
+
+  /**
+   * Start a continuous discovery loop that processes pending services
+   */
+  private startDiscoveryLoop(): void {
+    setInterval(async () => {
+      if (this.discoveryQueue.length > 0) {
+        await this.processDiscoveryQueue();
+      }
+    }, 1000); // Check every second
+  }
+
+  /**
+   * Process the discovery queue and register services
+   */
+  private async processDiscoveryQueue(): Promise<void> {
+    if (this.discoveryQueue.length === 0) {
+      return;
+    }
+
+    try {
+      const consumer = await this.getConsumer();
+      if (!consumer) {
+        return; // Consumer not ready yet
+      }
+
+      this.logger.log(`Processing discovery queue with ${this.discoveryQueue.length} services...`);
+      
+      const services = Array.from(this.discoveryQueue);
+      this.discoveryQueue = [];
+      
+      let totalRegistered = 0;
+      for (const { instance } of services) {
+        try {
+          const registeredCount = await this.registerEventHandlers(instance);
+          totalRegistered += registeredCount;
+        } catch (error) {
+          this.logger.error(`Failed to auto-register ${instance.constructor.name}:`, error);
+        }
+      }
+      
+      if (totalRegistered > 0) {
+        this.logger.log(`Successfully registered ${totalRegistered} event handlers from ${services.length} services`);
+      }
+      
+    } catch (error) {
+      this.logger.debug('Consumer not ready yet, services will be processed later');
+    }
+  }
+
+  /**
+   * Add a service to be auto-registered when the event system is ready
+   * This is the main entry point for automatic discovery
+   */
+  addServiceForAutoRegistration(instance: any): void {
+    if (this.autoRegisteredServices.has(instance)) {
+      return; // Already registered
+    }
+    
+    // Check if this service has @AutoEvents decorator
+    const autoRegisterMetadata = this.reflector.get<AutoRegisterEventsOptions>(
+      AUTO_REGISTER_EVENTS_METADATA,
+      instance.constructor
+    );
+
+    if (!autoRegisterMetadata?.enabled) {
+      this.logger.debug(`Auto-registration not enabled for ${instance.constructor.name}`);
+      return;
+    }
+    
+    // Add to discovery queue
+    this.discoveryQueue.push({ instance, timestamp: Date.now() });
+    
+    this.logger.debug(`Added ${instance.constructor.name} to discovery queue (${this.discoveryQueue.length} pending)`);
+    
+    // Try to process immediately if consumer is ready
+    this.processDiscoveryQueue();
+  }
+
+  /**
+   * Manually trigger registration of all pending services
+   * This can be called by the EventModuleScanner
+   */
+  async triggerRegistration(): Promise<void> {
+    this.logger.log('EventDiscoveryService: Manually triggering registration of pending services...');
+    await this.processDiscoveryQueue();
+  }
+
+  /**
+   * Get discovery statistics
+   */
+  getDiscoveryStats(): { pending: number; registered: number; queueLength: number } {
+    return {
+      pending: this.discoveryQueue.length,
+      registered: this.autoRegisteredServices.size,
+      queueLength: this.discoveryQueue.length
+    };
   }
 
   private async getConsumer(): Promise<any> {
@@ -32,7 +137,11 @@ export class EventDiscoveryService implements OnModuleInit {
       try {
         const eventSystem = this.eventSystemService.getEventSystem();
         this.consumer = eventSystem.consumer;
+        this.isInitialized = true;
         this.logger.log('Event discovery service initialized successfully');
+        
+        // Now try to process any pending services
+        await this.processDiscoveryQueue();
         return;
       } catch (error) {
         attempts++;
@@ -96,17 +205,26 @@ export class EventDiscoveryService implements OnModuleInit {
       return 0;
     }
 
-    // Get all method names from both prototype and instance
-    const prototype = Object.getPrototypeOf(instance);
-    const prototypeMethods = Object.getOwnPropertyNames(prototype).filter(
-      name => name !== 'constructor' && typeof prototype[name] === 'function'
+    // Check if this service has @AutoEvents decorator
+    const autoRegisterMetadata = this.reflector.get<AutoRegisterEventsOptions>(
+      AUTO_REGISTER_EVENTS_METADATA,
+      instance.constructor
     );
-    
-    const instanceMethods = Object.getOwnPropertyNames(instance).filter(
-      name => typeof instance[name] === 'function'
-    );
-    
-    const allMethodNames = [...new Set([...prototypeMethods, ...instanceMethods])];
+
+    if (!autoRegisterMetadata?.enabled) {
+      this.logger.debug(`Auto-registration not enabled for ${instance.constructor.name}`);
+      return 0;
+    }
+
+    // Prevent double registration
+    if (this.autoRegisteredServices.has(instance)) {
+      this.logger.debug(`Service ${instance.constructor.name} already registered, skipping`);
+      return 0;
+    }
+
+    // Use MetadataScanner like @nestjs/microservices does
+    const instancePrototype = Object.getPrototypeOf(instance);
+    const allMethodNames = this.metadataScanner.getAllMethodNames(instancePrototype);
 
     this.logger.debug(`Scanning methods for ${instance.constructor.name}: ${allMethodNames.join(', ')}`);
 
@@ -144,8 +262,17 @@ export class EventDiscoveryService implements OnModuleInit {
 
     if (registeredCount > 0) {
       this.logger.log(`Registered ${registeredCount} event handlers from ${instance.constructor.name}`);
+      this.autoRegisteredServices.add(instance);
     }
 
     return registeredCount;
+  }
+
+  /**
+   * Auto-register a service if it has @AutoEvents decorator
+   * This method is called automatically by the service lifecycle
+   */
+  async autoRegisterService(instance: any): Promise<number> {
+    return this.registerEventHandlers(instance);
   }
 }
