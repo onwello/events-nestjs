@@ -13,10 +13,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrdersService = void 0;
 const common_1 = require("@nestjs/common");
 const events_nestjs_1 = require("@logistically/events-nestjs");
-let OrdersService = OrdersService_1 = class OrdersService {
+let OrdersService = OrdersService_1 = class OrdersService extends events_nestjs_1.AutoEventHandlerBase {
     constructor(eventPublisher, eventDiscoveryService) {
+        super(eventDiscoveryService);
         this.eventPublisher = eventPublisher;
-        this.eventDiscoveryService = eventDiscoveryService;
         this.logger = new common_1.Logger(OrdersService_1.name);
         this.orders = [
             {
@@ -24,51 +24,57 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 userId: 1,
                 items: ['Laptop', 'Mouse'],
                 total: 1299.99,
+                status: 'completed',
+                createdAt: '2025-08-27T10:00:00.000Z'
+            },
+            {
+                id: 2,
+                userId: 2,
+                items: ['Keyboard'],
+                total: 89.99,
                 status: 'pending',
-                createdAt: new Date()
+                createdAt: '2025-08-27T11:00:00.000Z'
             }
         ];
     }
-    async onModuleInit() {
-        await this.eventDiscoveryService.registerEventHandlers(this);
-    }
-    async findAll() {
-        this.logger.log('Fetching all orders');
-        await this.eventPublisher.publish('orders.fetched', { count: this.orders.length });
+    findAll() {
         return this.orders;
     }
-    async findOne(id) {
-        this.logger.log(`Fetching order ${id}`);
-        const order = this.orders.find(o => o.id === id);
-        if (order) {
-            await this.eventPublisher.publish('order.fetched', { orderId: id });
-        }
-        return order || null;
+    findOne(id) {
+        return this.orders.find(order => order.id === id);
     }
-    async create(userId, items, total, status = 'pending') {
-        this.logger.log(`Creating order for user ${userId}`);
+    async create(userId, items, total) {
         const order = {
             id: this.orders.length + 1,
             userId,
             items,
             total,
-            status,
-            createdAt: new Date()
+            status: 'pending',
+            createdAt: new Date().toISOString()
         };
         this.orders.push(order);
-        await this.eventPublisher.publish('order.created', { order });
+        await this.eventPublisher.publish('order.created', {
+            order,
+            timestamp: new Date().toISOString()
+        });
+        this.logger.log(`Order created: ${JSON.stringify(order)}`);
         return order;
     }
     async updateStatus(id, status) {
-        this.logger.log(`Updating order ${id} status to ${status}`);
         const order = this.orders.find(o => o.id === id);
-        if (order) {
-            order.status = status;
-            await this.eventPublisher.publish('order.status.updated', { orderId: id, status });
+        if (!order) {
+            return undefined;
         }
-        return order || null;
+        order.status = status;
+        await this.eventPublisher.publish('order.updated', {
+            orderId: id,
+            order,
+            timestamp: new Date().toISOString()
+        });
+        this.logger.log(`Order ${id} status updated to: ${status}`);
+        return order;
     }
-    async handleUserCreated(event) {
+    async handleAllUserEvents(event) {
         this.logger.log(`All user events received: ${JSON.stringify(event)}`);
     }
     async handleUserUpdated(event) {
@@ -84,7 +90,7 @@ __decorate([
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], OrdersService.prototype, "handleUserCreated", null);
+], OrdersService.prototype, "handleAllUserEvents", null);
 __decorate([
     (0, events_nestjs_1.AutoEventHandler)({ eventType: 'user.updated' }),
     __metadata("design:type", Function),

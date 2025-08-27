@@ -1,9 +1,13 @@
-// Core decorators - Tree-shakable individual exports
-export { EventHandler, EventPublisher, EventSubscriber, getEventPublisherMetadata, getEventSubscriberMetadata } from './decorators';
-export { AutoEventHandler, getAutoEventHandlerMetadata } from './decorators/auto-event-handler.decorator';
-
 // Services - Tree-shakable individual exports
 export { EventSystemService, EventPublisherService, EventConsumerService, EventHandlerRegistryService, AutoEventHandlerService, EventDiscoveryService } from './services';
+
+// Decorators - Tree-shakable individual exports
+export { EventHandler, EventPublisher, EventSubscriber, getEventPublisherMetadata, getEventSubscriberMetadata } from './decorators';
+export { AutoEventHandler, getAutoEventHandlerMetadata } from './decorators/auto-event-handler.decorator';
+export { AutoRegisterEvents } from './decorators/auto-register-events.decorator';
+
+// Base classes - Tree-shakable individual exports
+export { AutoEventHandlerBase } from './base/auto-event-handler.base';
 
 // Modules - Tree-shakable individual exports
 export { EventsModule } from './modules';

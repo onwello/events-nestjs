@@ -13,77 +13,58 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EventDiscoveryService = void 0;
 const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
-const auto_event_handler_decorator_1 = require("../decorators/auto-event-handler.decorator");
 const event_system_service_1 = require("./event-system.service");
+const auto_event_handler_decorator_1 = require("../decorators/auto-event-handler.decorator");
 let EventDiscoveryService = EventDiscoveryService_1 = class EventDiscoveryService {
-    constructor(reflector, eventSystemService) {
-        this.reflector = reflector;
+    constructor(eventSystemService, reflector) {
         this.eventSystemService = eventSystemService;
+        this.reflector = reflector;
         this.logger = new common_1.Logger(EventDiscoveryService_1.name);
         this.consumer = null;
     }
     async onModuleInit() {
         this.logger.log('EventDiscoveryService onModuleInit called');
-        await this.initializeConsumer();
-        // Note: We'll rely on manual registration for now since automatic discovery
-        // requires access to internal NestJS services that aren't available in this context
-        this.logger.log('EventDiscoveryService initialized - manual registration required');
+        // Don't initialize consumer here - wait until it's actually needed
     }
-    async initializeConsumer() {
-        try {
-            // Wait for the event system to be ready
-            let attempts = 0;
-            const maxAttempts = 20;
-            while (attempts < maxAttempts) {
-                try {
-                    const eventSystem = this.eventSystemService.getEventSystem();
-                    this.consumer = eventSystem.consumer;
-                    this.logger.log('Event discovery service initialized successfully');
-                    return;
-                }
-                catch (error) {
-                    attempts++;
-                    if (attempts >= maxAttempts) {
-                        throw error;
-                    }
-                    // Wait 50ms before retrying
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
-            }
+    async getConsumer() {
+        if (!this.consumer) {
+            await this.initializeConsumer();
         }
-        catch (error) {
-            this.logger.error('Failed to initialize event discovery service', error);
+        return this.consumer;
+    }
+    async initializeConsumer(maxAttempts = 10) {
+        let attempts = 0;
+        while (attempts < maxAttempts) {
+            try {
+                const eventSystem = this.eventSystemService.getEventSystem();
+                this.consumer = eventSystem.consumer;
+                this.logger.log('Event discovery service initialized successfully');
+                return;
+            }
+            catch (error) {
+                attempts++;
+                if (attempts >= maxAttempts) {
+                    throw error;
+                }
+                // Wait 50ms before retrying
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
         }
     }
     /**
-     * Manually register event handlers from a service instance
-     * This method can be called by services that want to register their handlers
+     * Register a single event handler with explicit metadata
+     * This method is used by the EventModuleScanner for automatic discovery
      */
-    async registerEventHandlers(instance) {
-        if (!this.consumer) {
+    async registerHandler(instance, methodKey, metadata) {
+        const consumer = await this.getConsumer();
+        if (!consumer) {
             this.logger.warn('Consumer not initialized, skipping handler registration');
-            return 0;
+            return;
         }
-        const prototype = Object.getPrototypeOf(instance);
-        const methodNames = Object.getOwnPropertyNames(prototype).filter(name => name !== 'constructor' && typeof prototype[name] === 'function');
-        let registeredCount = 0;
-        for (const methodName of methodNames) {
-            const metadata = this.reflector.get(auto_event_handler_decorator_1.AUTO_EVENT_HANDLER_METADATA, instance[methodName]);
-            if (metadata) {
-                this.registerHandler(instance, methodName, metadata);
-                registeredCount++;
-            }
-        }
-        if (registeredCount > 0) {
-            this.logger.log(`Registered ${registeredCount} event handlers from ${instance.constructor.name}`);
-        }
-        return registeredCount;
-    }
-    registerHandler(instance, methodKey, metadata) {
         const eventType = metadata.eventType;
         const handler = instance[methodKey].bind(instance);
         try {
-            this.consumer.subscribe(eventType, async (event) => {
+            consumer.subscribe(eventType, async (event) => {
                 try {
                     await handler(event);
                 }
@@ -97,10 +78,49 @@ let EventDiscoveryService = EventDiscoveryService_1 = class EventDiscoveryServic
             this.logger.error(`Failed to register auto handler for ${eventType}:`, error);
         }
     }
+    /**
+     * Manually register event handlers from a service instance
+     * This method can be called by services that want to register their handlers
+     */
+    async registerEventHandlers(instance) {
+        const consumer = await this.getConsumer();
+        if (!consumer) {
+            this.logger.warn('Consumer not initialized, skipping handler registration');
+            return 0;
+        }
+        // Get all method names from both prototype and instance
+        const prototype = Object.getPrototypeOf(instance);
+        const prototypeMethods = Object.getOwnPropertyNames(prototype).filter(name => name !== 'constructor' && typeof prototype[name] === 'function');
+        const instanceMethods = Object.getOwnPropertyNames(instance).filter(name => typeof instance[name] === 'function');
+        const allMethodNames = [...new Set([...prototypeMethods, ...instanceMethods])];
+        this.logger.debug(`Scanning methods for ${instance.constructor.name}: ${allMethodNames.join(', ')}`);
+        let registeredCount = 0;
+        for (const methodName of allMethodNames) {
+            const method = instance[methodName];
+            if (typeof method === 'function') {
+                this.logger.debug(`Checking method: ${methodName}`);
+                // Try to get metadata using the helper function
+                let metadata = (0, auto_event_handler_decorator_1.getAutoEventHandlerMetadata)(instance, methodName);
+                // If not found, try using reflector directly
+                if (!metadata) {
+                    metadata = this.reflector.get(auto_event_handler_decorator_1.AUTO_EVENT_HANDLER_METADATA, method);
+                }
+                this.logger.debug(`Metadata for ${methodName}:`, metadata);
+                if (metadata && metadata.eventType) {
+                    await this.registerHandler(instance, methodName, metadata);
+                    registeredCount++;
+                }
+            }
+        }
+        if (registeredCount > 0) {
+            this.logger.log(`Registered ${registeredCount} event handlers from ${instance.constructor.name}`);
+        }
+        return registeredCount;
+    }
 };
 exports.EventDiscoveryService = EventDiscoveryService;
 exports.EventDiscoveryService = EventDiscoveryService = EventDiscoveryService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [core_1.Reflector,
-        event_system_service_1.EventSystemService])
+    __metadata("design:paramtypes", [event_system_service_1.EventSystemService,
+        core_1.Reflector])
 ], EventDiscoveryService);

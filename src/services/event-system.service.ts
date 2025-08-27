@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject } from '@nestjs/common';
 import { 
   createEventSystemBuilder,
   EventSystemConfig 
@@ -22,7 +22,7 @@ export class EventSystemService implements OnModuleInit, OnModuleDestroy {
   private eventSystem: EventSystem | null = null;
   private readonly config: NestJSEventsModuleOptions;
 
-  constructor(config: NestJSEventsModuleOptions) {
+  constructor(@Inject('EVENTS_CONFIG') config: NestJSEventsModuleOptions) {
     this.config = config;
   }
 

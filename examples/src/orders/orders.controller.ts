@@ -5,7 +5,6 @@ export interface CreateOrderDto {
   userId: number;
   items: string[];
   total: number;
-  status?: Order['status']; // Optional, will default to 'pending'
 }
 
 export interface UpdateOrderStatusDto {
@@ -22,7 +21,7 @@ export class OrdersController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string): Promise<Order | null> {
+  async findOne(@Param('id') id: string): Promise<Order | undefined> {
     return this.ordersService.findOne(parseInt(id, 10));
   }
 
@@ -31,8 +30,7 @@ export class OrdersController {
     return this.ordersService.create(
       createOrderDto.userId,
       createOrderDto.items,
-      createOrderDto.total,
-      createOrderDto.status
+      createOrderDto.total
     );
   }
 
@@ -40,7 +38,7 @@ export class OrdersController {
   async updateStatus(
     @Param('id') id: string, 
     @Body() updateOrderStatusDto: UpdateOrderStatusDto
-  ): Promise<Order | null> {
+  ): Promise<Order | undefined> {
     return this.ordersService.updateStatus(parseInt(id, 10), updateOrderStatusDto.status);
   }
 }

@@ -3,9 +3,6 @@ import { EventConsumer as CoreEventConsumer } from '@logistically/events';
 import { SubscribeOptions } from '@logistically/events/dist/event-transport/transport.interface';
 import { EventSystemService } from './event-system.service';
 import { NestJSEventHandler, wrapNestJSEventHandler, wrapNestJSPatternHandler } from '../types/handler.types';
-import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
-import { EVENT_HANDLER_METADATA } from '../decorators/event-handler.decorator';
-import { EVENT_SUBSCRIBER_METADATA } from '../decorators/event-subscriber.decorator';
 
 @Injectable()
 export class EventConsumerService implements OnModuleInit {
@@ -15,13 +12,11 @@ export class EventConsumerService implements OnModuleInit {
 
   constructor(
     private readonly eventSystemService: EventSystemService,
-    private readonly discoveryService: DiscoveryService,
-    private readonly metadataScanner: MetadataScanner,
-    private readonly reflector: Reflector,
   ) {}
 
   async onModuleInit() {
-    await this.discoverEventHandlers();
+    // Initialize consumer when module is ready
+    this.logger.log('EventConsumerService initialized');
   }
 
   private getConsumer(): CoreEventConsumer {
@@ -140,57 +135,21 @@ export class EventConsumerService implements OnModuleInit {
    * Discover and register event handlers automatically
    */
   private async discoverEventHandlers() {
-    const providers = this.discoveryService.getProviders();
-    const controllers = this.discoveryService.getControllers();
-
-    const instances = [...providers, ...controllers];
-
-    for (const instance of instances) {
-      if (instance.instance) {
-        this.scanInstanceForEventHandlers(instance.instance);
-        this.scanInstanceForEventSubscribers(instance.instance);
-      }
-    }
-
-    this.logger.log(`Discovered ${this.subscriptions.size} event handlers and subscribers`);
+    // This method is no longer needed as automatic discovery is removed
   }
 
   /**
    * Scan an instance for event handlers
    */
   private scanInstanceForEventHandlers(instance: any) {
-    const prototype = Object.getPrototypeOf(instance);
-    
-    this.metadataScanner.scanFromPrototype(
-      instance,
-      prototype,
-      (methodKey: string) => {
-        const metadata = this.reflector.get(EVENT_HANDLER_METADATA, instance[methodKey]);
-        
-        if (metadata) {
-          this.registerEventHandler(metadata, instance, methodKey);
-        }
-      },
-    );
+    // This method is no longer needed as automatic discovery is removed
   }
 
   /**
    * Scan an instance for event subscribers
    */
   private scanInstanceForEventSubscribers(instance: any) {
-    const prototype = Object.getPrototypeOf(instance);
-    
-    this.metadataScanner.scanFromPrototype(
-      instance,
-      prototype,
-      (methodKey: string) => {
-        const metadata = this.reflector.get(EVENT_SUBSCRIBER_METADATA, instance[methodKey]);
-        
-        if (metadata) {
-          this.registerEventSubscriber(metadata, instance, methodKey);
-        }
-      },
-    );
+    // This method is no longer needed as automatic discovery is removed
   }
 
   /**

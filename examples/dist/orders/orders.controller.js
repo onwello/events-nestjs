@@ -26,7 +26,7 @@ let OrdersController = class OrdersController {
         return this.ordersService.findOne(parseInt(id, 10));
     }
     async create(createOrderDto) {
-        return this.ordersService.create(createOrderDto.userId, createOrderDto.items, createOrderDto.total, createOrderDto.status);
+        return this.ordersService.create(createOrderDto.userId, createOrderDto.items, createOrderDto.total);
     }
     async updateStatus(id, updateOrderStatusDto) {
         return this.ordersService.updateStatus(parseInt(id, 10), updateOrderStatusDto.status);

@@ -14,21 +14,16 @@ exports.EventConsumerService = void 0;
 const common_1 = require("@nestjs/common");
 const event_system_service_1 = require("./event-system.service");
 const handler_types_1 = require("../types/handler.types");
-const core_1 = require("@nestjs/core");
-const event_handler_decorator_1 = require("../decorators/event-handler.decorator");
-const event_subscriber_decorator_1 = require("../decorators/event-subscriber.decorator");
 let EventConsumerService = EventConsumerService_1 = class EventConsumerService {
-    constructor(eventSystemService, discoveryService, metadataScanner, reflector) {
+    constructor(eventSystemService) {
         this.eventSystemService = eventSystemService;
-        this.discoveryService = discoveryService;
-        this.metadataScanner = metadataScanner;
-        this.reflector = reflector;
         this.logger = new common_1.Logger(EventConsumerService_1.name);
         this.consumer = null;
         this.subscriptions = new Map();
     }
     async onModuleInit() {
-        await this.discoverEventHandlers();
+        // Initialize consumer when module is ready
+        this.logger.log('EventConsumerService initialized');
     }
     getConsumer() {
         if (!this.consumer) {
@@ -131,40 +126,19 @@ let EventConsumerService = EventConsumerService_1 = class EventConsumerService {
      * Discover and register event handlers automatically
      */
     async discoverEventHandlers() {
-        const providers = this.discoveryService.getProviders();
-        const controllers = this.discoveryService.getControllers();
-        const instances = [...providers, ...controllers];
-        for (const instance of instances) {
-            if (instance.instance) {
-                this.scanInstanceForEventHandlers(instance.instance);
-                this.scanInstanceForEventSubscribers(instance.instance);
-            }
-        }
-        this.logger.log(`Discovered ${this.subscriptions.size} event handlers and subscribers`);
+        // This method is no longer needed as automatic discovery is removed
     }
     /**
      * Scan an instance for event handlers
      */
     scanInstanceForEventHandlers(instance) {
-        const prototype = Object.getPrototypeOf(instance);
-        this.metadataScanner.scanFromPrototype(instance, prototype, (methodKey) => {
-            const metadata = this.reflector.get(event_handler_decorator_1.EVENT_HANDLER_METADATA, instance[methodKey]);
-            if (metadata) {
-                this.registerEventHandler(metadata, instance, methodKey);
-            }
-        });
+        // This method is no longer needed as automatic discovery is removed
     }
     /**
      * Scan an instance for event subscribers
      */
     scanInstanceForEventSubscribers(instance) {
-        const prototype = Object.getPrototypeOf(instance);
-        this.metadataScanner.scanFromPrototype(instance, prototype, (methodKey) => {
-            const metadata = this.reflector.get(event_subscriber_decorator_1.EVENT_SUBSCRIBER_METADATA, instance[methodKey]);
-            if (metadata) {
-                this.registerEventSubscriber(metadata, instance, methodKey);
-            }
-        });
+        // This method is no longer needed as automatic discovery is removed
     }
     /**
      * Register an event handler
@@ -214,8 +188,5 @@ let EventConsumerService = EventConsumerService_1 = class EventConsumerService {
 exports.EventConsumerService = EventConsumerService;
 exports.EventConsumerService = EventConsumerService = EventConsumerService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [event_system_service_1.EventSystemService,
-        core_1.DiscoveryService,
-        core_1.MetadataScanner,
-        core_1.Reflector])
+    __metadata("design:paramtypes", [event_system_service_1.EventSystemService])
 ], EventConsumerService);

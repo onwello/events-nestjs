@@ -2,16 +2,12 @@ import { OnModuleInit } from '@nestjs/common';
 import { SubscribeOptions } from '@logistically/events/dist/event-transport/transport.interface';
 import { EventSystemService } from './event-system.service';
 import { NestJSEventHandler } from '../types/handler.types';
-import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
 export declare class EventConsumerService implements OnModuleInit {
     private readonly eventSystemService;
-    private readonly discoveryService;
-    private readonly metadataScanner;
-    private readonly reflector;
     private readonly logger;
     private consumer;
     private readonly subscriptions;
-    constructor(eventSystemService: EventSystemService, discoveryService: DiscoveryService, metadataScanner: MetadataScanner, reflector: Reflector);
+    constructor(eventSystemService: EventSystemService);
     onModuleInit(): Promise<void>;
     private getConsumer;
     /**

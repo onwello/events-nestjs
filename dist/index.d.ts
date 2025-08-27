@@ -1,6 +1,8 @@
+export { EventSystemService, EventPublisherService, EventConsumerService, EventHandlerRegistryService, AutoEventHandlerService, EventDiscoveryService } from './services';
 export { EventHandler, EventPublisher, EventSubscriber, getEventPublisherMetadata, getEventSubscriberMetadata } from './decorators';
 export { AutoEventHandler, getAutoEventHandlerMetadata } from './decorators/auto-event-handler.decorator';
-export { EventSystemService, EventPublisherService, EventConsumerService, EventHandlerRegistryService, AutoEventHandlerService, EventDiscoveryService } from './services';
+export { AutoRegisterEvents } from './decorators/auto-register-events.decorator';
+export { AutoEventHandlerBase } from './base/auto-event-handler.base';
 export { EventsModule } from './modules';
 export type { NestJSEvent, NestJSEventMetadata, EventHandlerMetadata, EventPublisherMetadata, EventSubscriberMetadata, EventHandlerContext, EventHandlerResult, EventHandlerRegistry, EventPublisherRegistry, EventSubscriberRegistry, NestJSEventHandlerOptions, NestJSEventPublisherOptions, NestJSEventSubscriberOptions, NestJSEventsModuleOptions, RedisClusterConfig, RedisSentinelConfig, PartitioningConfig, OrderingConfig, SchemaConfig, ReplayConfig, DLQConfig, AdvancedRoutingConfig, wrapNestJSEventHandler, wrapNestJSPatternHandler, } from './types';
 export { EventUtils, ConfigFactory, ConfigValidator } from './utils';

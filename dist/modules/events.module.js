@@ -12,79 +12,69 @@ const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
 const event_system_service_1 = require("../services/event-system.service");
 const event_publisher_service_1 = require("../services/event-publisher.service");
+const event_consumer_service_1 = require("../services/event-consumer.service");
 const event_handler_registry_service_1 = require("../services/event-handler-registry.service");
 const auto_event_handler_service_1 = require("../services/auto-event-handler.service");
 const event_discovery_service_1 = require("../services/event-discovery.service");
+const global_event_handler_service_1 = require("../services/global-event-handler.service");
+const simple_event_handler_service_1 = require("../services/simple-event-handler.service");
 const config_factory_1 = require("../utils/config.factory");
+const config_validator_1 = require("../utils/config.validator");
 let EventsModule = EventsModule_1 = class EventsModule {
-    static forRoot(options = {}) {
-        console.log('EventsModule.forRoot called with options:', JSON.stringify(options, null, 2));
-        // Merge user options with environment defaults
-        const mergedOptions = config_factory_1.ConfigFactory.mergeWithDefaults(options);
-        // Determine if autoDiscovery should be enabled
-        const autoDiscovery = mergedOptions.autoDiscovery ?? false;
-        console.log('EventsModule.forRoot - autoDiscovery:', autoDiscovery);
-        console.log('EventsModule.forRoot - mergedOptions:', JSON.stringify(mergedOptions, null, 2));
+    static forRoot(options) {
+        const config = config_factory_1.ConfigFactory.mergeWithDefaults(options);
+        config_validator_1.ConfigValidator.validateAll(config);
         const providers = [
             {
-                provide: event_system_service_1.EventSystemService,
-                useFactory: () => new event_system_service_1.EventSystemService(mergedOptions),
+                provide: 'EVENTS_CONFIG',
+                useValue: config,
             },
-            event_publisher_service_1.EventPublisherService,
-            event_handler_registry_service_1.EventHandlerRegistryService,
-            auto_event_handler_service_1.AutoEventHandlerService,
-            core_1.Reflector,
-        ];
-        // Only add EventDiscoveryService if autoDiscovery is enabled
-        if (autoDiscovery) {
-            providers.push(event_discovery_service_1.EventDiscoveryService);
-            console.log('EventDiscoveryService added to providers');
-        }
-        else {
-            console.log('EventDiscoveryService NOT added - autoDiscovery is false');
-        }
-        const exports = [
+            core_1.Reflector, // Add Reflector for EventDiscoveryService
             event_system_service_1.EventSystemService,
             event_publisher_service_1.EventPublisherService,
+            event_consumer_service_1.EventConsumerService,
             event_handler_registry_service_1.EventHandlerRegistryService,
             auto_event_handler_service_1.AutoEventHandlerService,
+            event_discovery_service_1.EventDiscoveryService,
+            global_event_handler_service_1.GlobalEventHandlerService,
+            simple_event_handler_service_1.SimpleEventHandlerService,
         ];
-        // Only export EventDiscoveryService if autoDiscovery is enabled
-        if (autoDiscovery) {
-            exports.push(event_discovery_service_1.EventDiscoveryService);
-        }
         return {
             module: EventsModule_1,
-            imports: [],
             providers,
-            exports,
-            global: mergedOptions.global ?? true,
+            exports: [
+                event_system_service_1.EventSystemService,
+                event_publisher_service_1.EventPublisherService,
+                event_consumer_service_1.EventConsumerService,
+                event_handler_registry_service_1.EventHandlerRegistryService,
+                auto_event_handler_service_1.AutoEventHandlerService,
+                event_discovery_service_1.EventDiscoveryService,
+                global_event_handler_service_1.GlobalEventHandlerService,
+                simple_event_handler_service_1.SimpleEventHandlerService,
+            ],
+            global: config.global || false,
         };
     }
     static forFeature() {
         return {
             module: EventsModule_1,
-            imports: [],
             providers: [
-                event_publisher_service_1.EventPublisherService,
-                event_handler_registry_service_1.EventHandlerRegistryService,
+                core_1.Reflector, // Add Reflector for EventDiscoveryService
+                event_discovery_service_1.EventDiscoveryService,
                 auto_event_handler_service_1.AutoEventHandlerService,
-                core_1.Reflector,
+                global_event_handler_service_1.GlobalEventHandlerService,
+                simple_event_handler_service_1.SimpleEventHandlerService,
             ],
             exports: [
-                event_publisher_service_1.EventPublisherService,
-                event_handler_registry_service_1.EventHandlerRegistryService,
-                auto_event_handler_service_1.AutoEventHandlerService
+                event_discovery_service_1.EventDiscoveryService,
+                auto_event_handler_service_1.AutoEventHandlerService,
+                global_event_handler_service_1.GlobalEventHandlerService,
+                simple_event_handler_service_1.SimpleEventHandlerService,
             ],
         };
     }
 };
 exports.EventsModule = EventsModule;
 exports.EventsModule = EventsModule = EventsModule_1 = __decorate([
-    (0, common_1.Global)(),
-    (0, common_1.Module)({
-        // Base module is empty - all functionality comes from dynamic modules
-        providers: [],
-        exports: [],
-    })
+    (0, common_1.Module)({})
 ], EventsModule);

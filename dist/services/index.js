@@ -1,23 +1,20 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __exportStar = (this && this.__exportStar) || function(m, exports) {
-    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
-};
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.SimpleEventHandlerService = exports.GlobalEventHandlerService = exports.EventDiscoveryService = exports.AutoEventHandlerService = exports.EventHandlerRegistryService = exports.EventConsumerService = exports.EventPublisherService = exports.EventSystemService = void 0;
 // Services index - Tree-shakable exports
-__exportStar(require("./event-system.service"), exports);
-__exportStar(require("./event-publisher.service"), exports);
-__exportStar(require("./event-consumer.service"), exports);
-__exportStar(require("./event-handler-registry.service"), exports);
-__exportStar(require("./auto-event-handler.service"), exports);
-__exportStar(require("./event-discovery.service"), exports);
+var event_system_service_1 = require("./event-system.service");
+Object.defineProperty(exports, "EventSystemService", { enumerable: true, get: function () { return event_system_service_1.EventSystemService; } });
+var event_publisher_service_1 = require("./event-publisher.service");
+Object.defineProperty(exports, "EventPublisherService", { enumerable: true, get: function () { return event_publisher_service_1.EventPublisherService; } });
+var event_consumer_service_1 = require("./event-consumer.service");
+Object.defineProperty(exports, "EventConsumerService", { enumerable: true, get: function () { return event_consumer_service_1.EventConsumerService; } });
+var event_handler_registry_service_1 = require("./event-handler-registry.service");
+Object.defineProperty(exports, "EventHandlerRegistryService", { enumerable: true, get: function () { return event_handler_registry_service_1.EventHandlerRegistryService; } });
+var auto_event_handler_service_1 = require("./auto-event-handler.service");
+Object.defineProperty(exports, "AutoEventHandlerService", { enumerable: true, get: function () { return auto_event_handler_service_1.AutoEventHandlerService; } });
+var event_discovery_service_1 = require("./event-discovery.service");
+Object.defineProperty(exports, "EventDiscoveryService", { enumerable: true, get: function () { return event_discovery_service_1.EventDiscoveryService; } });
+var global_event_handler_service_1 = require("./global-event-handler.service");
+Object.defineProperty(exports, "GlobalEventHandlerService", { enumerable: true, get: function () { return global_event_handler_service_1.GlobalEventHandlerService; } });
+var simple_event_handler_service_1 = require("./simple-event-handler.service");
+Object.defineProperty(exports, "SimpleEventHandlerService", { enumerable: true, get: function () { return simple_event_handler_service_1.SimpleEventHandlerService; } });
