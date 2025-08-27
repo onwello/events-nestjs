@@ -6,11 +6,13 @@ A NestJS integration library for the `@logistically/events` event system, provid
 
 - **NestJS Native Integration** - Built specifically for NestJS with decorators and dependency injection
 - **Automatic Event Handler Discovery** - Automatically discovers and registers event handlers using decorators
+- **Enterprise Performance Optimizations** - Intelligent caching, batch processing, and performance monitoring
 - **Multiple Transport Support** - Redis Streams, Memory, and custom transport plugins
 - **Pattern-Based Event Routing** - Flexible event routing with wildcard support
 - **Type Safety** - Full TypeScript support with proper typing
 - **Zero Configuration** - Works out of the box with sensible defaults
 - **Global Module Support** - Can be configured as a global module for app-wide access
+- **Built-in Performance Monitoring** - Real-time metrics and automatic performance warnings
 
 ## Installation
 
@@ -255,6 +257,23 @@ constructor(private readonly eventDiscoveryService: EventDiscoveryService) {}
 const count = await this.eventDiscoveryService.registerEventHandlers(this);
 ```
 
+#### `PerformanceMonitorService`
+
+Provides comprehensive performance monitoring and metrics (available when `autoDiscovery` is enabled).
+
+```typescript
+constructor(private readonly performanceMonitor: PerformanceMonitorService) {}
+
+// Get performance metrics
+const metrics = this.performanceMonitor.getMetrics();
+
+// Get performance recommendations
+const recommendations = this.performanceMonitor.getRecommendations();
+
+// Get performance summary
+const summary = this.performanceMonitor.getPerformanceSummary();
+```
+
 ### Event Object
 
 #### `NestJSEvent<T>`
@@ -322,9 +341,100 @@ routing: {
 
 For advanced routing configuration, see [@logistically/events Routing](https://github.com/onwello/events/).
 
-## Performance & Benchmarks
+## Performance & Optimizations
 
-For detailed performance metrics, benchmarks, and optimization strategies, see [@logistically/events Performance](https://github.com/onwello/events/).
+This library includes performance optimizations designed for production environments with high event throughput and low latency requirements.
+
+### Built-in Performance Features
+
+#### **Intelligent Discovery Loop**
+- **Event-driven processing** instead of continuous polling
+- **Conditional timers** that only run when there's work to do
+- **Automatic cleanup** of resources during module lifecycle
+
+#### **Metadata Caching System**
+- **TTL-based caching** (5-minute expiration) for method metadata
+- **WeakMap implementation** for automatic memory management
+- **Cache hit rate tracking** for performance monitoring
+- **Eliminates redundant method scanning** on repeated calls
+
+#### **Batch Processing**
+- **Configurable batch sizes** for discovery queue processing
+- **Efficient resource utilization** for large numbers of handlers
+- **Reduced overhead** per operation
+
+#### **Exponential Backoff Retry Strategy**
+- **Smart retry logic** starting at 100ms with exponential doubling
+- **Prevents thundering herd** problems in distributed systems
+- **Configurable maximum retry attempts**
+
+#### **Performance Monitoring Service**
+```typescript
+// Automatically included when autoDiscovery is enabled
+@Injectable()
+export class PerformanceMonitorService {
+  getMetrics(): PerformanceMetrics {
+    // Real-time performance data
+    return {
+      cache: { hits: number, misses: number, hitRate: number },
+      discovery: { pending: number, registered: number, retryCount: number },
+      memory: { heapUsed: number, heapTotal: number, external: number },
+      timing: { lastDiscoveryRun: number, averageProcessingTime: number }
+    };
+  }
+}
+```
+
+### Performance Metrics
+
+The library automatically tracks:
+- **Cache performance** (hit rates, miss patterns)
+- **Discovery efficiency** (queue processing times, retry counts)
+- **Memory usage** (heap utilization, external memory)
+- **Processing latency** (average response times, throughput)
+
+### Performance Warnings
+
+Automatic alerts for:
+- **Low cache hit rates** (< 50%)
+- **High memory usage** (> 100MB)
+- **Slow discovery processing** (> 1000ms)
+- **Excessive retry attempts** (> 10)
+
+### Configuration for Performance
+
+```typescript
+EventsModule.forRoot({
+  service: 'high-performance-app',
+  autoDiscovery: true, // Required for performance monitoring
+  
+  // Performance-focused transport configuration
+  transports: new Map([
+    ['redis', new RedisStreamsPlugin().createTransport({
+      enablePublisherBatching: true,
+      maxBatchSize: 1000,
+      maxWaitMs: 50
+    })]
+  ]),
+  
+  // Publisher performance settings
+  publisher: {
+    batching: {
+      enabled: true,
+      maxSize: 1000,
+      maxWaitMs: 50
+    },
+    retry: {
+      enabled: true,
+      maxAttempts: 3
+    }
+  }
+})
+```
+
+For detailed performance benchmarks and optimization strategies, see [@logistically/events Performance](https://github.com/onwello/events/).
+
+**📖 Performance Documentation**: See [PERFORMANCE.md](./PERFORMANCE.md) for comprehensive details about built-in optimizations and monitoring.
 
 ## Error Handling
 
@@ -479,10 +589,14 @@ export class UserService {
 
 #### Performance Issues
 
-1. Enable batching in publisher configuration
-2. Adjust batch sizes and timing
-3. Use appropriate transport for event volume
-4. Monitor memory usage and adjust accordingly
+1. **Enable performance monitoring** by setting `autoDiscovery: true`
+2. **Check performance metrics** using `PerformanceMonitorService.getMetrics()`
+3. **Monitor cache hit rates** - low rates indicate inefficient metadata scanning
+4. **Enable batching** in publisher configuration for high-volume scenarios
+5. **Adjust batch sizes and timing** based on your throughput requirements
+6. **Use appropriate transport** for event volume and latency requirements
+7. **Monitor memory usage** and adjust cache TTL if needed
+8. **Review performance warnings** logged by the monitoring service
 
 For detailed troubleshooting and performance optimization, see [@logistically/events Troubleshooting](https://github.com/onwello/events/).
 

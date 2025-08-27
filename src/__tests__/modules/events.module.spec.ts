@@ -430,8 +430,8 @@ describe('EventsModule', () => {
       });
 
       expect(dynamicModule.module).toBe(EventsModule);
-      expect(dynamicModule.providers).toHaveLength(10); // Base providers only (no autoDiscovery providers)
-      expect(dynamicModule.exports).toHaveLength(8); // Base exports only (no autoDiscovery exports, no EVENTS_CONFIG or Reflector)
+      expect(dynamicModule.providers).toHaveLength(10); // Base providers (no autoDiscovery providers, no PerformanceMonitorService)
+      expect(dynamicModule.exports).toHaveLength(8); // Base exports (no autoDiscovery exports, no EVENTS_CONFIG or Reflector, no PerformanceMonitorService)
       expect(dynamicModule.global).toBe(true); // Default value
     });
 
@@ -518,8 +518,8 @@ describe('EventsModule', () => {
       });
       
       expect(dynamicModule.module).toBe(EventsModule);
-      expect(dynamicModule.providers).toHaveLength(10); // Base providers only (no autoDiscovery providers)
-      expect(dynamicModule.exports).toHaveLength(8); // Base exports only (no autoDiscovery exports, no EVENTS_CONFIG or Reflector)
+      expect(dynamicModule.providers).toHaveLength(10); // Base providers (no autoDiscovery providers, no PerformanceMonitorService)
+      expect(dynamicModule.exports).toHaveLength(8); // Base exports (no autoDiscovery exports, no EVENTS_CONFIG or Reflector, no PerformanceMonitorService)
       expect(dynamicModule.global).toBe(true); // Default value
     });
 
@@ -587,8 +587,8 @@ describe('EventsModule', () => {
       });
       
       expect(dynamicModule.module).toBe(EventsModule);
-      expect(dynamicModule.providers).toHaveLength(14); // All base providers + autoDiscovery providers
-      expect(dynamicModule.exports).toHaveLength(12); // All base exports + autoDiscovery exports (no EVENTS_CONFIG or Reflector)
+      expect(dynamicModule.providers).toHaveLength(15); // All base providers + PerformanceMonitorService + autoDiscovery providers
+      expect(dynamicModule.exports).toHaveLength(13); // All base exports + PerformanceMonitorService + autoDiscovery exports (no EVENTS_CONFIG or Reflector)
       expect(dynamicModule.global).toBe(true); // Default value
     });
   });

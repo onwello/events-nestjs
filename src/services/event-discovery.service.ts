@@ -1,17 +1,22 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Reflector, MetadataScanner } from '@nestjs/core';
 import { EventSystemService } from './event-system.service';
 import { AUTO_EVENT_HANDLER_METADATA, getAutoEventHandlerMetadata } from '../decorators/auto-event-handler.decorator';
 import { AUTO_REGISTER_EVENTS_METADATA, AutoRegisterEventsOptions } from '../decorators/auto-events.decorator';
 
 @Injectable()
-export class EventDiscoveryService implements OnModuleInit {
+export class EventDiscoveryService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EventDiscoveryService.name);
   private readonly metadataScanner = new MetadataScanner();
   private consumer: any = null;
   private autoRegisteredServices: Set<any> = new Set();
   private discoveryQueue: Array<{ instance: any; timestamp: number }> = [];
   private isInitialized = false;
+  private discoveryTimer: NodeJS.Timeout | null = null;
+  private isProcessing = false;
+  private retryAttempts = new Map<any, number>();
+  private readonly maxRetries = 5;
+  private readonly baseRetryDelay = 100; // Start with 100ms
 
   constructor(
     private readonly eventSystemService: EventSystemService,
@@ -21,29 +26,59 @@ export class EventDiscoveryService implements OnModuleInit {
   async onModuleInit() {
     this.logger.log('EventDiscoveryService onModuleInit called');
     
-    // Start the discovery loop
+    // Start the discovery loop only when needed
     this.startDiscoveryLoop();
   }
 
-  /**
-   * Start a continuous discovery loop that processes pending services
-   */
-  private startDiscoveryLoop(): void {
-    setInterval(async () => {
-      if (this.discoveryQueue.length > 0) {
-        await this.processDiscoveryQueue();
-      }
-    }, 1000); // Check every second
+  async onModuleDestroy() {
+    this.cleanup();
+  }
+
+  private cleanup(): void {
+    if (this.discoveryTimer) {
+      clearInterval(this.discoveryTimer);
+      this.discoveryTimer = null;
+    }
+    this.discoveryQueue = [];
+    this.retryAttempts.clear();
   }
 
   /**
-   * Process the discovery queue and register services
+   * Start discovery loop only when there are pending services
+   * Uses event-driven approach instead of continuous polling
+   */
+  private startDiscoveryLoop(): void {
+    // Only start timer if there are pending services
+    if (this.discoveryQueue.length > 0 && !this.discoveryTimer) {
+      this.discoveryTimer = setInterval(async () => {
+        if (this.discoveryQueue.length > 0 && !this.isProcessing) {
+          await this.processDiscoveryQueue();
+        }
+      }, 1000);
+    }
+  }
+
+  /**
+   * Stop discovery loop when no services are pending
+   */
+  private stopDiscoveryLoop(): void {
+    if (this.discoveryTimer && this.discoveryQueue.length === 0) {
+      clearInterval(this.discoveryTimer);
+      this.discoveryTimer = null;
+      this.logger.debug('Discovery loop stopped - no pending services');
+    }
+  }
+
+  /**
+   * Process the discovery queue with optimized batching and error handling
    */
   private async processDiscoveryQueue(): Promise<void> {
-    if (this.discoveryQueue.length === 0) {
+    if (this.discoveryQueue.length === 0 || this.isProcessing) {
       return;
     }
 
+    this.isProcessing = true;
+    
     try {
       const consumer = await this.getConsumer();
       if (!consumer) {
@@ -52,26 +87,89 @@ export class EventDiscoveryService implements OnModuleInit {
 
       this.logger.log(`Processing discovery queue with ${this.discoveryQueue.length} services...`);
       
-      const services = Array.from(this.discoveryQueue);
-      this.discoveryQueue = [];
+      // Process in batches for better performance
+      const batchSize = 10;
+      const batches = this.chunkArray(this.discoveryQueue, batchSize);
       
       let totalRegistered = 0;
-      for (const { instance } of services) {
-        try {
-          const registeredCount = await this.registerEventHandlers(instance);
-          totalRegistered += registeredCount;
-        } catch (error) {
-          this.logger.error(`Failed to auto-register ${instance.constructor.name}:`, error);
-        }
+      let failedServices: Array<{ instance: any; error: any }> = [];
+
+      for (const batch of batches) {
+        const batchPromises = batch.map(async ({ instance }) => {
+          try {
+            const registeredCount = await this.registerEventHandlers(instance);
+            totalRegistered += registeredCount;
+            this.autoRegisteredServices.add(instance);
+            this.retryAttempts.delete(instance);
+            return { success: true, instance };
+          } catch (error) {
+            this.logger.error(`Failed to auto-register ${instance.constructor.name}:`, error);
+            failedServices.push({ instance, error });
+            return { success: false, instance, error };
+          }
+        });
+
+        // Wait for batch to complete before processing next batch
+        await Promise.allSettled(batchPromises);
+      }
+
+      // Handle failed services with exponential backoff
+      this.handleFailedServices(failedServices);
+      
+      // Clear successfully processed services
+      this.discoveryQueue = this.discoveryQueue.filter(({ instance }) => 
+        !this.autoRegisteredServices.has(instance)
+      );
+
+      if (totalRegistered > 0) {
+        this.logger.log(`Successfully registered ${totalRegistered} event handlers from ${batches.length} batches`);
       }
       
-      if (totalRegistered > 0) {
-        this.logger.log(`Successfully registered ${totalRegistered} event handlers from ${services.length} services`);
-      }
+      // Stop discovery loop if no more pending services
+      this.stopDiscoveryLoop();
       
     } catch (error) {
       this.logger.debug('Consumer not ready yet, services will be processed later');
+    } finally {
+      this.isProcessing = false;
     }
+  }
+
+  /**
+   * Handle failed services with exponential backoff retry logic
+   */
+  private handleFailedServices(failedServices: Array<{ instance: any; error: any }>): void {
+    for (const { instance } of failedServices) {
+      const attempts = this.retryAttempts.get(instance) || 0;
+      
+      if (attempts < this.maxRetries) {
+        const delay = this.baseRetryDelay * Math.pow(2, attempts);
+        this.retryAttempts.set(instance, attempts + 1);
+        
+        this.logger.debug(`Scheduling retry for ${instance.constructor.name} in ${delay}ms (attempt ${attempts + 1})`);
+        
+        setTimeout(() => {
+          if (!this.autoRegisteredServices.has(instance)) {
+            this.discoveryQueue.push({ instance, timestamp: Date.now() });
+            this.startDiscoveryLoop(); // Restart loop if needed
+          }
+        }, delay);
+      } else {
+        this.logger.error(`Max retries exceeded for ${instance.constructor.name}, removing from queue`);
+        this.retryAttempts.delete(instance);
+      }
+    }
+  }
+
+  /**
+   * Utility method to chunk array into batches
+   */
+  private chunkArray<T>(array: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
   }
 
   /**
@@ -99,6 +197,9 @@ export class EventDiscoveryService implements OnModuleInit {
     
     this.logger.debug(`Added ${instance.constructor.name} to discovery queue (${this.discoveryQueue.length} pending)`);
     
+    // Start discovery loop if not already running
+    this.startDiscoveryLoop();
+    
     // Try to process immediately if consumer is ready
     this.processDiscoveryQueue();
   }
@@ -115,11 +216,12 @@ export class EventDiscoveryService implements OnModuleInit {
   /**
    * Get discovery statistics
    */
-  getDiscoveryStats(): { pending: number; registered: number; queueLength: number } {
+  getDiscoveryStats(): { pending: number; registered: number; queueLength: number; retryCount: number } {
     return {
       pending: this.discoveryQueue.length,
       registered: this.autoRegisteredServices.size,
-      queueLength: this.discoveryQueue.length
+      queueLength: this.discoveryQueue.length,
+      retryCount: this.retryAttempts.size
     };
   }
 
@@ -148,8 +250,9 @@ export class EventDiscoveryService implements OnModuleInit {
         if (attempts >= maxAttempts) {
           throw error;
         }
-        // Wait 50ms before retrying
-        await new Promise(resolve => setTimeout(resolve, 50));
+        // Use exponential backoff for retries
+        const delay = this.baseRetryDelay * Math.pow(2, attempts - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }

@@ -12,6 +12,7 @@ import { EventModuleScanner } from '../services/event-module-scanner.service';
 import { AutoRegistrationTriggerService } from '../services/auto-registration-trigger.service';
 import { GlobalEventHandlerService } from '../services/global-event-handler.service';
 import { SimpleEventHandlerService } from '../services/simple-event-handler.service';
+import { PerformanceMonitorService } from '../services/performance-monitor.service';
 import { ConfigFactory } from '../utils/config.factory';
 import { ConfigValidator } from '../utils/config.validator';
 import { NestJSEventsModuleOptions } from '../types/config.types';
@@ -44,6 +45,7 @@ export class EventsModule {
       EventListenersController,
       EventModuleScanner,
       AutoRegistrationTriggerService,
+      PerformanceMonitorService, // Performance monitoring requires autoDiscovery
     ] : [];
 
     const providers = [...baseProviders, ...autoDiscoveryProviders];
@@ -65,6 +67,7 @@ export class EventsModule {
       EventListenersController,
       EventModuleScanner,
       AutoRegistrationTriggerService,
+      PerformanceMonitorService, // Export performance monitoring with autoDiscovery
     ] : [];
 
     const exports = [...baseExports, ...autoDiscoveryExports];
