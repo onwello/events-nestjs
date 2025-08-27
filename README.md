@@ -457,6 +457,8 @@ export class UserService {
 }
 ```
 
+**Note:** The `AutoEventsBase` class has been removed. Use the `@AutoEvents()` decorator instead.
+
 ## Troubleshooting
 
 ### Common Issues

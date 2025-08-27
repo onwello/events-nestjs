@@ -58,7 +58,7 @@ async function testEnterpriseIntegration() {
     console.log('\n🎉 Enterprise Integration Test Completed Successfully!');
     console.log('\n📋 Summary:');
     console.log('   ✅ Decorator-based registration (@AutoEvents) working');
-    console.log('   ✅ Interface-based registration (AutoEventHandlerProvider) working');
+    console.log('   ✅ Decorator-based registration (@AutoEvents) working');
     console.log('   ✅ Event publishing working');
     console.log('   ✅ Event consumption working');
     console.log('   ✅ Pattern-based routing working');

@@ -19,9 +19,3 @@ export { EventSubscriber } from './decorators/event-subscriber.decorator';
 export { NestJSEvent } from './types/event.types';
 export { NestJSEventsModuleOptions } from './types/config.types';
 export { NestJSEventHandler, NestJSEventPublisher, NestJSEventSubscriber } from './types/handler.types';
-
-// Mixins
-export { AutoEventRegistrationMixin } from './mixins/auto-event-registration.mixin';
-
-// Base classes
-export { AutoEventsBase } from './base/auto-events.base';
