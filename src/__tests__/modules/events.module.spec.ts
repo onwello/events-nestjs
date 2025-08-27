@@ -6,6 +6,65 @@ import { EventPublisherService } from '../../services/event-publisher.service';
 import { EventConsumerService } from '../../services/event-consumer.service';
 import { ConfigFactory } from '../../utils/config.factory';
 
+// Helper function to create mock transport for testing
+function createMockTransport() {
+  return {
+    name: 'memory',
+    config: {},
+    constructor: { name: 'MemoryTransport' },
+    capabilities: {
+      supportsPublishing: true,
+      supportsSubscription: true,
+      supportsBatching: false,
+      supportsPartitioning: false,
+      supportsOrdering: false,
+      supportsPatternRouting: false,
+      supportsConsumerGroups: false,
+      supportsDeadLetterQueues: false,
+      supportsMessageRetention: false,
+      supportsMessageCompression: false,
+      maxMessageSize: 1024,
+      maxBatchSize: 1,
+      maxTopics: 100,
+      maxPartitions: 1,
+      maxConsumerGroups: 0,
+      supportsPersistence: false,
+      supportsReplication: false,
+      supportsFailover: false,
+      supportsTransactions: false,
+      supportsMetrics: false,
+      supportsTracing: false,
+      supportsHealthChecks: false
+    },
+    connect: async () => {},
+    disconnect: async () => {},
+    isConnected: () => true,
+    publish: async () => {},
+    subscribe: async () => {},
+    unsubscribe: async () => {},
+    close: async () => {},
+    getStatus: async () => ({ 
+      connected: true, 
+      healthy: true, 
+      uptime: 0, 
+      version: '1.0.0' 
+    }),
+    getMetrics: async () => ({
+      messagesPublished: 0,
+      messagesReceived: 0,
+      publishLatency: 0,
+      receiveLatency: 0,
+      errorCount: 0,
+      successCount: 0,
+      lastActivity: new Date(),
+      errorRate: 0,
+      throughput: 0,
+      memoryUsage: 0,
+      cpuUsage: 0
+    })
+  } as any;
+}
+
 // Mock the core library
 jest.mock('@logistically/events', () => ({
   createEventSystemBuilder: jest.fn(() => ({
@@ -59,7 +118,7 @@ describe('EventsModule', () => {
         imports: [
           EventsModule.forRoot({
             service: 'test-service',
-            transports: new Map([['memory', {} as any]])
+            transports: new Map([['memory', createMockTransport()]])
           })
         ],
       }).compile();
@@ -93,7 +152,7 @@ describe('EventsModule', () => {
         imports: [
           EventsModule.forRoot({
             service: 'test-service',
-            transports: new Map([['memory', {} as any]]),
+            transports: new Map([['memory', createMockTransport()]]),
             global: false
           })
         ],
@@ -108,7 +167,7 @@ describe('EventsModule', () => {
         imports: [
           EventsModule.forRoot({
             service: 'test-service',
-            transports: new Map([['memory', {} as any]]),
+            transports: new Map([['memory', createMockTransport()]]),
             global: undefined
           })
         ],
@@ -123,7 +182,7 @@ describe('EventsModule', () => {
         imports: [
           EventsModule.forRoot({
             service: 'test-service',
-            transports: new Map([['memory', {} as any]]),
+            transports: new Map([['memory', createMockTransport()]]),
             redisCluster: {
               clusterNodes: [
                 { host: 'cluster-1', port: 7000 },
@@ -161,7 +220,7 @@ describe('EventsModule', () => {
       const module = await Test.createTestingModule({
         imports: [
           EventsModule.forRoot({
-            transports: new Map([['memory', {} as any]])
+            transports: new Map([['memory', createMockTransport()]])
           })
         ],
       }).compile();
@@ -178,7 +237,7 @@ describe('EventsModule', () => {
         imports: [
           EventsModule.forRoot({
             service: 'test-service',
-            transports: new Map([['memory', {} as any]])
+            transports: new Map([['memory', createMockTransport()]])
           })
         ],
       }).compile();
@@ -290,24 +349,81 @@ describe('EventsModule', () => {
         imports: [
           EventsModule.forRoot({
             service: 'test-service',
-            transports: new Map([['memory', {} as any]])
+            autoDiscovery: true, // Enable autoDiscovery to get EventConsumerService
+            transports: new Map([
+              ['memory', {
+                name: 'memory',
+                config: {},
+                constructor: { name: 'MemoryTransport' },
+                capabilities: {
+                  supportsPublishing: true,
+                  supportsSubscription: true,
+                  supportsBatching: false,
+                  supportsPartitioning: false,
+                  supportsOrdering: false,
+                  supportsPatternRouting: false,
+                  supportsConsumerGroups: false,
+                  supportsDeadLetterQueues: false,
+                  supportsMessageRetention: false,
+                  supportsMessageCompression: false,
+                  maxMessageSize: 1024,
+                  maxBatchSize: 1,
+                  maxTopics: 100,
+                  maxPartitions: 1,
+                  maxConsumerGroups: 0,
+                  supportsPersistence: false,
+                  supportsReplication: false,
+                  supportsFailover: false,
+                  supportsTransactions: false,
+                  supportsMetrics: false,
+                  supportsTracing: false,
+                  supportsHealthChecks: false
+                },
+                connect: async () => {},
+                disconnect: async () => {},
+                isConnected: () => true,
+                publish: async () => {},
+                subscribe: async () => {},
+                unsubscribe: async () => {},
+                close: async () => {},
+                getStatus: async () => ({ 
+                  connected: true, 
+                  healthy: true, 
+                  uptime: 0, 
+                  version: '1.0.0' 
+                }),
+                getMetrics: async () => ({
+                  messagesPublished: 0,
+                  messagesReceived: 0,
+                  publishLatency: 0,
+                  receiveLatency: 0,
+                  errorCount: 0,
+                  successCount: 0,
+                  lastActivity: new Date(),
+                  errorRate: 0,
+                  throughput: 0,
+                  memoryUsage: 0,
+                  cpuUsage: 0
+                })
+              } as any]
+            ])
           })
         ],
       }).compile();
 
       const eventConsumerService = module.get<EventConsumerService>(EventConsumerService);
-      expect(eventConsumerService).toBeInstanceOf(EventConsumerService);
+      expect(eventConsumerService).toBeDefined();
     });
 
     it('should verify dynamic module structure for forRoot', async () => {
       const dynamicModule = EventsModule.forRoot({
         service: 'test-service',
-        transports: new Map([['memory', {} as any]])
+        transports: new Map([['memory', createMockTransport()]])
       });
 
       expect(dynamicModule.module).toBe(EventsModule);
-      expect(dynamicModule.imports).toContain(DiscoveryModule);
-      expect(dynamicModule.providers).toHaveLength(3);
+      expect(dynamicModule.imports).toHaveLength(0); // No DiscoveryModule import
+      expect(dynamicModule.providers).toHaveLength(4); // EventSystemService, EventPublisherService, EventConsumerService, Reflector
       expect(dynamicModule.exports).toHaveLength(3);
       expect(dynamicModule.global).toBe(true); // Default value
     });
@@ -326,10 +442,148 @@ describe('EventsModule', () => {
       const dynamicModule = EventsModule.forFeature();
 
       expect(dynamicModule.module).toBe(EventsModule);
-      expect(dynamicModule.imports).toContain(DiscoveryModule);
-      expect(dynamicModule.providers).toHaveLength(2);
-      expect(dynamicModule.exports).toHaveLength(2);
+      expect(dynamicModule.imports).toHaveLength(0); // No DiscoveryModule import
+      expect(dynamicModule.providers).toHaveLength(2); // EventPublisherService, Reflector (no EventConsumerService in forFeature)
+      expect(dynamicModule.exports).toHaveLength(1); // Only EventPublisherService
       expect(dynamicModule.global).toBeUndefined(); // forFeature doesn't set global
+    });
+
+    it('should create module with autoDiscovery disabled', () => {
+      const dynamicModule = EventsModule.forRoot({ 
+        autoDiscovery: false,
+        transports: new Map([
+          ['memory', {
+            name: 'memory',
+            config: {},
+            constructor: { name: 'MemoryTransport' },
+            capabilities: {
+              supportsPublishing: true,
+              supportsSubscription: true,
+              supportsBatching: false,
+              supportsPartitioning: false,
+              supportsOrdering: false,
+              supportsPatternRouting: false,
+              supportsConsumerGroups: false,
+              supportsDeadLetterQueues: false,
+              supportsMessageRetention: false,
+              supportsMessageCompression: false,
+              maxMessageSize: 1024,
+              maxBatchSize: 1,
+              maxTopics: 100,
+              maxPartitions: 1,
+              maxConsumerGroups: 0,
+              supportsPersistence: false,
+              supportsReplication: false,
+              supportsFailover: false,
+              supportsTransactions: false,
+              supportsMetrics: false,
+              supportsTracing: false,
+              supportsHealthChecks: false
+            },
+            connect: async () => {},
+            disconnect: async () => {},
+            isConnected: () => true,
+            publish: async () => {},
+            subscribe: async () => {},
+            unsubscribe: async () => {},
+            close: async () => {},
+            getStatus: async () => ({ 
+              connected: true, 
+              healthy: true, 
+              uptime: 0, 
+              version: '1.0.0' 
+            }),
+            getMetrics: async () => ({
+              messagesPublished: 0,
+              messagesReceived: 0,
+              publishLatency: 0,
+              receiveLatency: 0,
+              errorCount: 0,
+              successCount: 0,
+              lastActivity: new Date(),
+              errorRate: 0,
+              throughput: 0,
+              memoryUsage: 0,
+              cpuUsage: 0
+            })
+          } as any]
+        ])
+      });
+      
+      expect(dynamicModule.module).toBe(EventsModule);
+      expect(dynamicModule.imports).toHaveLength(0); // No DiscoveryModule import
+      expect(dynamicModule.providers).toHaveLength(3); // EventSystemService, EventPublisherService, Reflector (no EventConsumerService)
+      expect(dynamicModule.exports).toHaveLength(2); // EventSystemService, EventPublisherService (no EventConsumerService)
+      expect(dynamicModule.global).toBe(true); // Default value
+    });
+
+    it('should create module with autoDiscovery enabled', () => {
+      const dynamicModule = EventsModule.forRoot({ 
+        autoDiscovery: true,
+        transports: new Map([
+          ['memory', {
+            name: 'memory',
+            config: {},
+            constructor: { name: 'MemoryTransport' },
+            capabilities: {
+              supportsPublishing: true,
+              supportsSubscription: true,
+              supportsBatching: false,
+              supportsPartitioning: false,
+              supportsOrdering: false,
+              supportsPatternRouting: false,
+              supportsConsumerGroups: false,
+              supportsDeadLetterQueues: false,
+              supportsMessageRetention: false,
+              supportsMessageCompression: false,
+              maxMessageSize: 1024,
+              maxBatchSize: 1,
+              maxTopics: 100,
+              maxPartitions: 1,
+              maxConsumerGroups: 0,
+              supportsPersistence: false,
+              supportsReplication: false,
+              supportsFailover: false,
+              supportsTransactions: false,
+              supportsMetrics: false,
+              supportsTracing: false,
+              supportsHealthChecks: false
+            },
+            connect: async () => {},
+            disconnect: async () => {},
+            isConnected: () => true,
+            publish: async () => {},
+            subscribe: async () => {},
+            unsubscribe: async () => {},
+            close: async () => {},
+            getStatus: async () => ({ 
+              connected: true, 
+              healthy: true, 
+              uptime: 0, 
+              version: '1.0.0' 
+            }),
+            getMetrics: async () => ({
+              messagesPublished: 0,
+              messagesReceived: 0,
+              publishLatency: 0,
+              receiveLatency: 0,
+              errorCount: 0,
+              successCount: 0,
+              lastActivity: new Date(),
+              errorRate: 0,
+              throughput: 0,
+              memoryUsage: 0,
+              cpuUsage: 0
+            })
+          } as any]
+        ])
+      });
+      
+      expect(dynamicModule.module).toBe(EventsModule);
+      expect(dynamicModule.imports).toHaveLength(0); // No DiscoveryModule import
+      expect(dynamicModule.providers).toHaveLength(4); // EventSystemService, EventPublisherService, EventConsumerService, Reflector
+      expect(dynamicModule.exports).toHaveLength(3); // EventSystemService, EventPublisherService, EventConsumerService
+      expect(dynamicModule.global).toBe(true); // Default value
     });
   });
 

@@ -34,6 +34,172 @@ NestJS integration for [@logistically/events](https://github.com/onwello/events)
 - **Schema Management**: Event schema validation and evolution
 - **Message Replay**: Replay messages from specific points in time
 
+## 🔧 Configuration
+
+### Basic Setup
+
+```typescript
+import { Module } from '@nestjs/common';
+import { EventsModule } from '@logistically/events-nestjs';
+import { MemoryTransportPlugin } from '@logistically/events';
+
+@Module({
+  imports: [
+    EventsModule.forRoot({
+      service: 'my-service',
+      originPrefix: 'my-org',
+      autoDiscovery: true,
+      transports: new Map([
+        ['memory', new MemoryTransportPlugin().createTransport({})]
+      ]),
+      global: true
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### Memory Transport Configuration
+
+The memory transport is perfect for development, testing, and simple applications:
+
+```typescript
+EventsModule.forRoot({
+  service: 'my-service',
+  originPrefix: 'my-org',
+  autoDiscovery: true,
+  transports: new Map([
+    ['memory', new MemoryTransportPlugin().createTransport({
+      // Memory transport options
+      enablePatternRouting: true,    // Enable pattern-based event routing
+      maxQueueSize: 10000,          // Maximum events in memory queue
+      processingTimeout: 5000,       // Event processing timeout (ms)
+    })]
+  ]),
+  publisher: {
+    batching: {
+      enabled: true,
+      maxSize: 100,
+      strategy: 'time',
+      maxWaitMs: 1000,
+      maxConcurrentBatches: 5
+    }
+  },
+  global: true
+})
+```
+
+**Memory Transport Characteristics:**
+- ✅ **Immediate Processing**: Events processed in real-time
+- ✅ **Pattern Routing**: Support for `user.*`, `*.created` patterns
+- ✅ **Full Event Envelopes**: Complete metadata and headers
+- ✅ **Multiple Handlers**: Multiple handlers per event type
+- ❌ **No Persistence**: Events lost on restart
+- ❌ **No Clustering**: Single instance only
+- ❌ **No Retry Logic**: Failed events are lost
+
+### Redis Transport Configuration
+
+For production applications with persistence and clustering:
+
+```typescript
+import { RedisStreamsPlugin } from '@logistically/events';
+
+EventsModule.forRoot({
+  service: 'my-service',
+  originPrefix: 'my-org',
+  autoDiscovery: true,
+  transports: new Map([
+    ['redis', new RedisStreamsPlugin().createTransport({
+      redis: {
+        host: 'localhost',
+        port: 6379,
+        password: 'your-password',
+        db: 0,
+        // Cluster configuration
+        cluster: {
+          nodes: [
+            { host: 'redis-1', port: 6379 },
+            { host: 'redis-2', port: 6379 },
+            { host: 'redis-3', port: 6379 }
+          ]
+        }
+      },
+      streams: {
+        consumerGroup: 'my-service-group',
+        consumerId: 'consumer-1',
+        enablePartitioning: true,
+        partitionCount: 8
+      }
+    })]
+  ]),
+  publisher: {
+    batching: {
+      enabled: true,
+      maxSize: 1000,
+      strategy: 'partition',
+      maxWaitMs: 100,
+      maxConcurrentBatches: 10
+    },
+    retry: {
+      maxRetries: 3,
+      backoffStrategy: 'exponential',
+      baseDelay: 1000,
+      maxDelay: 10000
+    }
+  },
+  consumer: {
+    enablePatternRouting: true,
+    enableConsumerGroups: true,
+    validationMode: 'strict'
+  },
+  global: true
+})
+```
+
+### Event Handler Configuration
+
+```typescript
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { AutoEventHandler, EventDiscoveryService, NestJSEvent } from '@logistically/events-nestjs';
+
+@Injectable()
+export class MyService implements OnModuleInit {
+  constructor(
+    private readonly eventDiscoveryService: EventDiscoveryService,
+  ) {}
+
+  async onModuleInit() {
+    // Register event handlers
+    await this.eventDiscoveryService.registerEventHandlers(this);
+  }
+
+  // Pattern-based handler
+  @AutoEventHandler({ eventType: 'user.*' })
+  async handleAllUserEvents(event: NestJSEvent<any>) {
+    console.log('All user events:', event.header.type, event.body);
+  }
+
+  // Specific handler
+  @AutoEventHandler({ eventType: 'user.created' })
+  async handleUserCreated(event: NestJSEvent<any>) {
+    console.log('User created:', event.body);
+  }
+
+  // Handler with retry configuration
+  @AutoEventHandler({ 
+    eventType: 'order.processed',
+    retry: {
+      maxAttempts: 3,
+      backoffMs: 1000
+    }
+  })
+  async handleOrderProcessed(event: NestJSEvent<any>) {
+    console.log('Order processed:', event.body);
+  }
+}
+```
+
 ## 🔬 Advanced Features
 
 All advanced features are now **fully implemented and accessible** through our NestJS integration layer. No need to use the core library directly!

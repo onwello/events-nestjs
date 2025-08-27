@@ -1,8 +1,9 @@
 // Core decorators - Tree-shakable individual exports
 export { EventHandler, EventPublisher, EventSubscriber, getEventPublisherMetadata, getEventSubscriberMetadata } from './decorators';
+export { AutoEventHandler, getAutoEventHandlerMetadata } from './decorators/auto-event-handler.decorator';
 
 // Services - Tree-shakable individual exports
-export { EventSystemService, EventPublisherService, EventConsumerService } from './services';
+export { EventSystemService, EventPublisherService, EventConsumerService, EventHandlerRegistryService, AutoEventHandlerService, EventDiscoveryService } from './services';
 
 // Modules - Tree-shakable individual exports
 export { EventsModule } from './modules';

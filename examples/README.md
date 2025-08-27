@@ -1,356 +1,288 @@
-# Examples Directory
+# NestJS Events Example Application
 
-This directory contains comprehensive examples demonstrating how to use `@logistically/events-nestjs` in various scenarios. Each example showcases different aspects of the library and provides practical implementation patterns.
+This example demonstrates how to use the `@logistically/events-nestjs` library with NestJS to implement a robust event-driven architecture.
 
-## 📁 Example Files
+## 🚀 Features Demonstrated
 
-### 1. **Basic Examples**
+- **Automatic Event Handler Discovery**: Using `@AutoEventHandler` decorators
+- **Pattern-Based Event Routing**: Support for wildcard patterns like `user.*` and specific event types
+- **Full Event Envelopes**: Complete event structure with headers, body, and metadata
+- **Redis Transport Integration**: Production-ready event persistence
+- **Hybrid Transport Configuration**: Memory and Redis transports working together
+- **Event Handler Registration**: Manual registration using `EventDiscoveryService`
 
-#### `app.module.example.ts`
-- **Purpose**: Basic module configuration and setup
-- **Features**: Simple Redis Streams and Memory transport configuration
-- **Use Case**: Getting started with the library, basic event publishing/consuming
-- **Complexity**: ⭐ Beginner
+## 📋 Prerequisites
 
-#### `user-service.example.ts`
-- **Purpose**: Basic service implementation with events
-- **Features**: Event handlers, publishers, and utility methods
-- **Use Case**: Understanding basic event-driven service patterns
-- **Complexity**: ⭐ Beginner
-
-#### `environment-config.example.ts`
-- **Purpose**: Environment-based configuration management
-- **Features**: Environment variables, ConfigFactory usage, flexible configuration
-- **Use Case**: Production deployments, configuration management
-- **Complexity**: ⭐⭐ Intermediate
-
-### 2. **Advanced Examples**
-
-#### `advanced-features.example.ts`
-- **Purpose**: Showcase all advanced features of the library
-- **Features**: 
-  - Redis Cluster/Sentinel support
-  - Advanced partitioning strategies
-  - Message ordering and schema management
-  - Content-based routing and metrics
-  - Dead Letter Queues and message replay
-- **Use Case**: Production systems, high-scale applications
-- **Complexity**: ⭐⭐⭐⭐⭐ Expert
-
-#### `microservices.example.ts`
-- **Purpose**: Distributed system architecture with events
-- **Features**: 
-  - Multiple service modules
-  - Cross-service event communication
-  - Service-specific configurations
-  - Event correlation and causation
-- **Use Case**: Microservices architecture, distributed systems
-- **Complexity**: ⭐⭐⭐⭐ Advanced
-
-#### `testing-development.example.ts`
-- **Purpose**: Testing strategies and development workflows
-- **Features**: 
-  - Test configurations
-  - Development vs production setups
-  - Performance testing
-  - Integration testing patterns
-- **Use Case**: Development workflows, testing strategies
-- **Complexity**: ⭐⭐⭐ Intermediate
-
-## 🚀 Getting Started
-
-### Prerequisites
 - Node.js 18+ and npm
-- Redis server (for Redis Streams examples)
-- NestJS 10+ project
+- Redis (running via Docker or locally)
+- Basic understanding of NestJS
 
-### Installation
+## 🛠️ Installation
+
 ```bash
-# Install the library
-npm install @logistically/events-nestjs
+# Install dependencies
+npm install
 
-# Install core events library
-npm install @logistically/events
+# Build the application
+npm run build
 ```
 
-### Quick Start
-1. **Copy the basic examples** (`app.module.example.ts`, `user-service.example.ts`)
-2. **Adapt to your project structure**
-3. **Configure your Redis connection**
-4. **Start with simple event publishing/consuming**
+## ⚙️ Configuration
 
-## 📚 Learning Path
+### Redis Setup
 
-### **Phase 1: Basics** (Beginner)
-1. Start with `app.module.example.ts` to understand module configuration
-2. Implement `user-service.example.ts` to learn event handling
-3. Experiment with basic event publishing and consuming
+The application is configured to use Redis for event persistence. Redis should be running and accessible.
 
-### **Phase 2: Configuration** (Intermediate)
-1. Study `environment-config.example.ts` for configuration management
-2. Learn about different transport configurations
-3. Understand validation modes and auto-discovery
-
-### **Phase 3: Advanced Features** (Advanced)
-1. Explore `advanced-features.example.ts` for production features
-2. Implement Redis Cluster/Sentinel for high availability
-3. Configure advanced partitioning and message ordering
-
-### **Phase 4: Architecture** (Expert)
-1. Study `microservices.example.ts` for distributed systems
-2. Implement cross-service event communication
-3. Design event-driven microservices architecture
-
-### **Phase 5: Quality Assurance** (All Levels)
-1. Use `testing-development.example.ts` for testing strategies
-2. Implement proper testing patterns
-3. Set up development vs production configurations
-
-## 🔧 Configuration Examples
-
-### Basic Configuration
-```typescript
-EventsModule.forRoot({
-  service: 'my-service',
-  transports: new Map([
-    ['redis', new RedisStreamsPlugin().createTransport({
-      url: 'redis://localhost:6379',
-      groupId: 'my-group'
-    })]
-  ])
-})
+**Docker (Recommended):**
+```bash
+docker run -d --name redis-shared -p 6379:6379 redis:7-alpine
 ```
 
-### Advanced Configuration
+**Environment Variables:**
+```bash
+# Redis connection settings (optional - defaults shown)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+```
+
+### Application Configuration
+
+The main configuration is in `src/app.module.ts`:
+
 ```typescript
 EventsModule.forRoot({
-  service: 'advanced-service',
+  service: 'example-app',
+  originPrefix: 'example',
+  autoDiscovery: true, // Enable automatic event handler discovery
   transports: new Map([
-    ['redis', new RedisStreamsPlugin().createTransport({
-      url: 'redis://localhost:6379',
-      cluster: { enabled: true, nodes: ['redis://localhost:7000'] },
-      partitioning: { enabled: true, strategy: 'hash', partitionCount: 8 },
-      ordering: { enabled: true, strategy: 'global-sequence' }
+    // Redis transport for production-like testing
+    ['redis-streams', new RedisStreamsPlugin().createTransport({
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD,
+      db: parseInt(process.env.REDIS_DB || '0'),
     })]
   ]),
+  // Routing configuration to determine which transport gets which messages
+  routing: {
+    routes: [
+      // Route user events to Redis for persistence
+      {
+        pattern: 'user.*',
+        transport: 'redis-streams',
+        priority: 1
+      },
+      // Route order events to Redis for persistence
+      {
+        pattern: 'order.*',
+        transport: 'redis-streams',
+        priority: 1
+      }
+    ],
+    validationMode: 'warn',
+    originPrefix: 'example',
+    topicMapping: {
+      'user.*': 'user-events',
+      'order.*': 'order-events'
+    },
+    defaultTopicStrategy: 'namespace',
+    enablePatternRouting: true,
+    enableBatching: true,
+    enablePartitioning: false,
+    enableConsumerGroups: false
+  },
   publisher: {
-    batching: { enabled: true, strategy: 'partition' },
-    retry: { maxRetries: 5, backoffStrategy: 'fibonacci' }
-  }
+    batching: {
+      enabled: true,
+      maxSize: 100,
+      strategy: 'time',
+      maxWaitMs: 1000,
+      maxConcurrentBatches: 5
+    }
+  },
+  global: true
 })
 ```
 
-## 🏗️ Architecture Patterns
+#### Event Routing Configuration
 
-### **Event-Driven Service**
+The `routing` configuration determines which transport gets which messages using pattern-based routing:
+
+- **User Events** (`user.*`): Routed to Redis for persistence
+- **Order Events** (`order.*`): Routed to Redis for persistence
+
+**Routing Configuration Features:**
+- **Pattern Matching**: Uses wildcard patterns (`user.*`, `order.*`)
+- **Transport Selection**: Routes events to specific transports based on patterns
+- **Priority System**: Higher priority routes are evaluated first
+- **Topic Mapping**: Maps patterns to specific topics for organization
+
+**Topic Organization:**
+- `user-events`: All user-related events
+- `order-events`: All order-related events
+
+This allows you to:
+- ✅ **Persist Important Events**: User and order events are stored in Redis
+- ✅ **Topic Organization**: Events are organized into logical topics
+- ✅ **Pattern-Based Routing**: Flexible event routing with wildcard patterns
+
+## 🏃‍♂️ Running the Application
+
+```bash
+# Start the development server
+npm run start:dev
+```
+
+The application will start on `http://localhost:3009`.
+
+## 🧪 Testing
+
+### 1. Event Consumption Test
+
+Test that events are being published and consumed correctly:
+
+```bash
+node test-event-consumption.js
+```
+
+**Expected Output:**
+```
+✅ User created: { id: 3, name: 'Event Test User', email: 'eventtest@example.com' }
+✅ Order created: { id: 3, userId: 3, items: ['Event Test Item'], total: 199.99, status: 'pending' }
+✅ User updated: { id: 3, name: 'Updated Event Test User', email: 'eventtest@example.com' }
+✅ User deleted
+```
+
+**Check Server Logs For:**
+- "All user events received" (from pattern handler)
+- "User updated event received" (from specific handler)
+- "Order created event received" (from specific handler)
+
+### 2. Redis Transport Test
+
+Test that events are being persisted in Redis:
+
+```bash
+node test-redis.js
+```
+
+**Verify Redis Storage:**
+```bash
+# Check if events are stored in Redis
+docker exec redis-shared redis-cli xlen user-events
+docker exec redis-shared redis-cli xlen order-events
+```
+
+## 📊 API Endpoints
+
+### Users API
+
+- `POST /users` - Create a user (triggers `user.created`)
+- `GET /users` - Get all users
+- `GET /users/:id` - Get user by ID
+- `PUT /users/:id` - Update user (triggers `user.updated`)
+- `DELETE /users/:id` - Delete user (triggers `user.deleted`)
+
+### Orders API
+
+- `POST /orders` - Create an order (triggers `order.created`)
+- `GET /orders` - Get all orders
+- `GET /orders/:id` - Get order by ID
+- `PUT /orders/:id/status` - Update order status (triggers `order.updated`)
+
+### Health Check
+
+- `GET /health` - Application health status
+
+## 🔧 Event Handler Implementation
+
+### Automatic Event Handler Discovery
+
+The `OrdersService` demonstrates automatic event handler discovery:
+
 ```typescript
 @Injectable()
-export class MyService {
-  @EventPublisher({ eventType: 'my.event' })
-  async doSomething(): Promise<void> {
-    // Business logic
-    const event = EventUtils.createDomainEvent(/* ... */);
-    await this.eventPublisher.publishEvent(event);
+export class OrdersService implements OnModuleInit {
+  constructor(
+    private readonly eventPublisher: EventPublisherService,
+    private readonly eventDiscoveryService: EventDiscoveryService,
+  ) {}
+
+  async onModuleInit() {
+    // Register event handlers automatically
+    await this.eventDiscoveryService.registerEventHandlers(this);
   }
 
-  @EventHandler({ eventType: 'my.event' })
-  async handleEvent(event: NestJSEvent<any>): Promise<void> {
-    // Event handling logic
+  // Pattern-based handler for all user events
+  @AutoEventHandler({ eventType: 'user.*' })
+  async handleAllUserEvents(event: NestJSEvent<any>) {
+    this.logger.log(`All user events received: ${JSON.stringify(event)}`);
   }
-}
-```
 
-### **Cross-Service Communication**
-```typescript
-// Service A publishes event
-const event = EventUtils.createDomainEvent(
-  'user.created',
-  userData,
-  'service-a',
-  userId,
-  1,
-  { correlationId: correlationId }
-);
+  // Specific handler for user updates
+  @AutoEventHandler({ eventType: 'user.updated' })
+  async handleUserUpdated(event: NestJSEvent<any>) {
+    this.logger.log(`User updated event received: ${JSON.stringify(event)}`);
+  }
 
-// Service B handles event
-@EventHandler({ eventType: 'user.created' })
-async handleUserCreated(event: NestJSEvent<any>): Promise<void> {
-  const correlationId = event.nestjsMetadata?.correlationId;
-  // Process with correlation tracking
-}
-```
-
-## 🧪 Testing Strategies
-
-### **Unit Testing**
-```typescript
-describe('MyService', () => {
-  let service: MyService;
-  let eventPublisher: EventPublisherService;
-
-  beforeEach(async () => {
-    const module = await Test.createTestingModule({
-      imports: [TestModule], // Uses memory transport
-    }).compile();
-
-    service = module.get<MyService>(MyService);
-    eventPublisher = module.get<EventPublisherService>(EventPublisherService);
-  });
-
-  it('should publish event', async () => {
-    const publishSpy = jest.spyOn(eventPublisher, 'publishEvent');
-    await service.doSomething();
-    expect(publishSpy).toHaveBeenCalled();
-  });
-});
-```
-
-### **Integration Testing**
-```typescript
-describe('Event Flow Integration', () => {
-  it('should handle complete event flow', async () => {
-    // 1. Publish event
-    await service.publishEvent(data);
-    
-    // 2. Wait for processing
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // 3. Verify results
-    expect(result).toBeDefined();
-  });
-});
-```
-
-## 🔍 Debugging and Monitoring
-
-### **Development Mode**
-```typescript
-// Enable debug logging
-transports: new Map([
-  ['memory', new MemoryTransportPlugin().createTransport({
-    debug: process.env.NODE_ENV === 'development'
-  })]
-])
-```
-
-### **Metrics and Health Checks**
-```typescript
-@Controller('health')
-export class HealthController {
-  @Get()
-  async getHealth() {
-    const metrics = await this.eventSystem.getMetrics();
-    return {
-      status: 'healthy',
-      uptime: metrics.uptime,
-      activeConnections: metrics.activeConnections
-    };
+  // Specific handler for order creation
+  @AutoEventHandler({ eventType: 'order.created' })
+  async handleOrderCreated(event: NestJSEvent<any>) {
+    this.logger.log(`Order created event received: ${JSON.stringify(event)}`);
   }
 }
 ```
 
-## 📊 Performance Considerations
+### Event Structure
 
-### **Batching Strategies**
+Events are published as complete envelopes with full metadata:
+
 ```typescript
-publisher: {
-  batching: {
-    enabled: true,
-    strategy: 'partition', // 'size' | 'time' | 'partition'
-    maxSize: 1000,
-    maxWaitMs: 200
+{
+  "header": {
+    "id": "fb55637c-4c8c-4781-8700-5237fecc0dc2",
+    "type": "user.created",
+    "origin": "example-app",
+    "originPrefix": "example",
+    "timestamp": "2025-08-27T15:46:50.397Z",
+    "hash": "873f6c9553a92b3c3a2d9531666a00e2c4be6dfa3c077180fc6784ab0c6ff6a6",
+    "version": "1.0.0"
+  },
+  "body": {
+    "user": {
+      "id": 3,
+      "name": "Event Test User",
+      "email": "eventtest@example.com"
+    },
+    "timestamp": "2025-08-27T15:46:50.397Z"
   }
 }
 ```
 
-### **Partitioning for Scale**
-```typescript
-partitioning: {
-  enabled: true,
-  strategy: 'hash', // 'hash' | 'round-robin' | 'key-based' | 'dynamic'
-  partitionCount: 8,
-  partitionKeyExtractor: (event) => event.body?.userId
-}
-```
+## 🎯 Key Features
 
-## 🚨 Error Handling
+1. **Automatic Discovery**: Event handlers are automatically discovered and registered
+2. **Pattern Routing**: Support for wildcard patterns (`user.*`, `order.*`)
+3. **Full Event Envelopes**: Complete event structure with headers and metadata
+4. **Redis Persistence**: Events are stored in Redis for durability
+5. **Topic Organization**: Events are organized into logical topics
+6. **Batching Support**: Publisher batching for improved performance
+7. **Error Handling**: Comprehensive error handling and logging
 
-### **Dead Letter Queues**
-```typescript
-enableDLQ: true,
-dlqStreamPrefix: 'dlq:my-service:',
-dlqRetention: {
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  maxSize: 10000
-}
-```
+## 📝 Notes
 
-### **Retry Policies**
-```typescript
-retry: {
-  maxRetries: 3,
-  backoffStrategy: 'exponential', // 'exponential' | 'fixed' | 'fibonacci'
-  baseDelay: 1000,
-  maxDelay: 10000
-}
-```
+- **Transport Names**: Use `'redis-streams'` as the transport name for Redis
+- **Pattern Matching**: Wildcard patterns work for both publishing and subscribing
+- **Event Handlers**: Receive complete event envelopes, not just the body
+- **Topic Mapping**: Optional but recommended for organization
+- **Priority Routing**: Higher priority routes are evaluated first
 
-## 🔐 Security Considerations
+## 🚀 Production Considerations
 
-### **Environment Variables**
-```bash
-# Never commit sensitive configuration
-REDIS_PASSWORD=your_redis_password
-REDIS_SENTINEL_PASSWORD=your_sentinel_password
-SERVICE_SECRET_KEY=your_service_key
-```
-
-### **Validation Modes**
-```typescript
-validationMode: 'strict', // 'strict' | 'warn' | 'none'
-schemaValidation: {
-  enabled: true,
-  strictMode: true,
-  allowUnknownFields: false
-}
-```
-
-## 📈 Scaling Strategies
-
-### **Horizontal Scaling**
-- Use consumer groups for load distribution
-- Implement partitioning for parallel processing
-- Configure multiple service instances
-
-### **Vertical Scaling**
-- Optimize batch sizes and timeouts
-- Configure appropriate retry policies
-- Monitor and adjust resource allocation
-
-## 🤝 Contributing
-
-When adding new examples:
-1. **Follow the existing structure** and naming conventions
-2. **Include comprehensive comments** explaining the purpose
-3. **Provide environment variable examples** for configuration
-4. **Add appropriate complexity ratings** (⭐ to ⭐⭐⭐⭐⭐)
-5. **Include testing examples** where applicable
-6. **Document any dependencies** or prerequisites
-
-## 📚 Additional Resources
-
-- [Main README](../README.md) - Complete library documentation
-- [API Reference](../docs/api.md) - Detailed API documentation
-- [Configuration Guide](../docs/configuration.md) - Configuration options
-- [Testing Guide](../docs/testing.md) - Testing strategies and patterns
-
-## 🆘 Getting Help
-
-- **Issues**: Create an issue on GitHub
-- **Discussions**: Use GitHub Discussions for questions
-- **Documentation**: Check the main README and docs
-- **Examples**: Study these examples for implementation patterns
-
----
-
-**Happy Event-Driven Development! 🚀**
+- **Redis Configuration**: Configure Redis with appropriate persistence settings
+- **Monitoring**: Add monitoring for event processing and Redis performance
+- **Scaling**: Consider Redis clustering for high-throughput scenarios
+- **Security**: Implement proper authentication and authorization
+- **Backup**: Set up Redis backup and recovery procedures
