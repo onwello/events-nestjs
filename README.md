@@ -469,6 +469,158 @@ See the `examples/` directory for complete working examples:
 
 MIT License - see LICENSE file for details.
 
+## Environment Variables
+
+The library supports extensive configuration via environment variables. All configuration can be set through environment variables with sensible defaults.
+
+### Core Configuration
+
+```bash
+# Service Configuration
+SERVICE_NAME=my-app                    # Service name for event routing
+EVENTS_ORIGIN_PREFIX=my-app            # Origin prefix for events
+EVENTS_VALIDATION_MODE=warn            # Validation mode: strict, warn, ignore
+EVENTS_GLOBAL=true                     # Make module globally available
+EVENTS_AUTO_DISCOVERY=true             # Enable automatic handler discovery
+EVENTS_DEBUG=false                     # Enable debug logging
+```
+
+### Publisher Configuration
+
+```bash
+# Batching
+EVENTS_BATCHING_ENABLED=true           # Enable publisher batching
+EVENTS_BATCHING_MAX_SIZE=1000          # Maximum batch size
+EVENTS_BATCHING_MAX_WAIT_MS=100        # Maximum wait time in milliseconds
+EVENTS_BATCHING_MAX_CONCURRENT=5       # Maximum concurrent batches
+EVENTS_BATCHING_STRATEGY=size          # Batching strategy: size, time, hybrid
+
+# Retry
+EVENTS_RETRY_MAX_ATTEMPTS=3            # Maximum retry attempts
+EVENTS_RETRY_BACKOFF_STRATEGY=exponential  # Backoff strategy: fixed, exponential
+EVENTS_RETRY_BASE_DELAY=1000           # Base delay in milliseconds
+EVENTS_RETRY_MAX_DELAY=10000           # Maximum delay in milliseconds
+
+# Rate Limiting
+EVENTS_RATE_LIMITING_MAX_RPS=1000      # Maximum requests per second
+EVENTS_RATE_LIMITING_TIME_WINDOW=60000 # Time window in milliseconds
+EVENTS_RATE_LIMITING_STRATEGY=sliding-window  # Strategy: sliding-window, token-bucket
+```
+
+### Consumer Configuration
+
+```bash
+# Routing
+EVENTS_PATTERN_ROUTING=true            # Enable pattern-based routing
+EVENTS_CONTENT_BASED_ROUTING=true      # Enable content-based routing
+EVENTS_CONDITIONAL_ROUTING=true        # Enable conditional routing
+EVENTS_CONSUMER_GROUPS=true            # Enable consumer groups
+EVENTS_CONSUMER_VALIDATION_MODE=warn   # Consumer validation mode
+
+# Discovery
+EVENTS_SCAN_CONTROLLERS=true           # Scan controllers for handlers
+EVENTS_SCAN_PROVIDERS=true             # Scan providers for handlers
+EVENTS_METADATA_KEYS=handler,event     # Comma-separated metadata keys
+
+# Request/Response Events
+EVENTS_REQUEST_EVENTS=true             # Enable request events
+EVENTS_RESPONSE_EVENTS=true            # Enable response events
+EVENTS_CORRELATION_ID_HEADER=X-Correlation-ID  # Correlation ID header
+EVENTS_CAUSATION_ID_HEADER=X-Causation-ID      # Causation ID header
+```
+
+### Redis Transport Configuration
+
+```bash
+# Basic Redis
+REDIS_URL=redis://localhost:6379       # Redis connection URL
+REDIS_GROUP_ID=my-app-group            # Consumer group ID
+REDIS_BATCH_SIZE=100                   # Batch size for processing
+REDIS_MAX_RETRIES=3                    # Maximum retry attempts
+REDIS_ENABLE_COMPRESSION=true          # Enable message compression
+REDIS_DLQ_STREAM_PREFIX=dlq:           # Dead letter queue stream prefix
+
+# Redis Cluster
+REDIS_ENABLE_CLUSTER_MODE=false        # Enable Redis cluster mode
+REDIS_CLUSTER_NODES=node1:7000,node2:7001  # Comma-separated cluster nodes
+REDIS_ENABLE_FAILOVER=true             # Enable failover
+REDIS_FAILOVER_RECOVERY_ENABLED=true   # Enable failover recovery
+REDIS_FAILOVER_MAX_RETRIES=3           # Failover max retries
+REDIS_FAILOVER_RETRY_DELAY=1000        # Failover retry delay
+
+# Redis Sentinel
+REDIS_ENABLE_SENTINEL_MODE=false       # Enable Redis sentinel mode
+REDIS_SENTINEL_NODES=sentinel1:26379,sentinel2:26380  # Sentinel nodes
+REDIS_SENTINEL_NAME=mymaster           # Sentinel master name
+REDIS_SENTINEL_CONNECTION_TIMEOUT=5000 # Sentinel connection timeout
+REDIS_SENTINEL_COMMAND_TIMEOUT=3000    # Sentinel command timeout
+
+# Redis Partitioning
+REDIS_ENABLE_PARTITIONING=false        # Enable partitioning
+REDIS_PARTITIONING_STRATEGY=hash       # Partitioning strategy: hash, round-robin
+REDIS_PARTITIONING_AUTO_SCALING=true   # Enable auto-scaling
+REDIS_PARTITION_COUNT=8                # Number of partitions
+
+# Redis Ordering
+REDIS_ENABLE_ORDERING=false            # Enable message ordering
+REDIS_ORDERING_STRATEGY=partition      # Ordering strategy: partition, global
+REDIS_ENABLE_CAUSAL_DEPENDENCIES=true  # Enable causal dependencies
+
+# Redis Schema Management
+REDIS_ENABLE_SCHEMA_MANAGEMENT=false   # Enable schema management
+REDIS_SCHEMA_VALIDATION_MODE=strict    # Schema validation mode
+REDIS_SCHEMA_REGISTRY=                 # Schema registry URL
+REDIS_SCHEMA_EVOLUTION=true            # Enable schema evolution
+REDIS_SCHEMA_VERSIONING=semantic       # Schema versioning strategy
+
+# Redis Message Replay
+REDIS_ENABLE_MESSAGE_REPLAY=false      # Enable message replay
+REDIS_REPLAY_MAX_SIZE=10000            # Maximum replay size
+REDIS_REPLAY_SELECTIVE=true            # Enable selective replay
+REDIS_REPLAY_STRATEGIES=all,error      # Comma-separated replay strategies
+
+# Redis Dead Letter Queue
+REDIS_ENABLE_DLQ=false                 # Enable dead letter queue
+REDIS_DLQ_STREAM_PREFIX=dlq:           # DLQ stream prefix
+REDIS_MAX_RETRIES=3                    # Maximum retries before DLQ
+REDIS_RETRY_DELAY=1000                 # Retry delay in milliseconds
+REDIS_MAX_RETRIES_BEFORE_DLQ=3         # Max retries before sending to DLQ
+REDIS_DLQ_RETENTION=86400000           # DLQ retention in milliseconds (24h)
+REDIS_DLQ_CLASSIFICATION=true          # Enable DLQ classification
+REDIS_DLQ_ERROR_TYPES=validation,processing,timeout  # Error types for DLQ
+```
+
+### Memory Transport Configuration
+
+```bash
+# Memory Transport
+MEMORY_ORIGIN_PREFIX=memory            # Memory transport origin prefix
+MEMORY_PATTERN_MATCHING=true           # Enable pattern matching
+MEMORY_MAX_MESSAGE_SIZE=1048576        # Maximum message size in bytes (1MB)
+```
+
+### Usage Examples
+
+```bash
+# Development
+SERVICE_NAME=my-app-dev
+EVENTS_AUTO_DISCOVERY=true
+EVENTS_DEBUG=true
+REDIS_URL=redis://localhost:6379
+
+# Production
+SERVICE_NAME=my-app-prod
+EVENTS_AUTO_DISCOVERY=true
+EVENTS_DEBUG=false
+REDIS_URL=redis://redis-cluster:6379
+REDIS_ENABLE_CLUSTER_MODE=true
+REDIS_ENABLE_DLQ=true
+EVENTS_BATCHING_ENABLED=true
+EVENTS_RETRY_MAX_ATTEMPTS=5
+```
+
+For complete environment variable options and advanced configuration, see [@logistically/events Configuration](https://github.com/onwello/events/).
+
 ## Related Links
 
 - [@logistically/events](https://github.com/onwello/events/) - Core events library with detailed configuration, features, and benchmarks
