@@ -30,5 +30,8 @@ export function AutoEventHandler(options: AutoEventHandlerOptions): MethodDecora
 }
 
 export function getAutoEventHandlerMetadata(target: any, propertyKey: string | symbol): AutoEventHandlerOptions | undefined {
+  if (!target || !propertyKey) {
+    return undefined;
+  }
   return Reflect.getMetadata(AUTO_EVENT_HANDLER_METADATA, target, propertyKey);
 }

@@ -9,7 +9,7 @@ export interface User {
 }
 
 @Injectable()
-@AutoEvents() // TRUE ENTERPRISE DX - Zero manual work needed!
+@AutoEvents()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   private users: User[] = [

@@ -11,7 +11,7 @@ export interface Order {
 }
 
 @Injectable()
-@AutoEvents() // TRUE ENTERPRISE DX - Zero manual work needed!
+@AutoEvents()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
   private orders: Order[] = [
