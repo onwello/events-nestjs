@@ -1,6 +1,8 @@
 # API Reference
 
-Complete API reference for `@logistically/events-nestjs`.
+API reference for `@logistically/events-nestjs` v2.0.0.
+
+This document provides API documentation for services, decorators, types, and configuration options available in the library.
 
 ## Module
 
@@ -62,6 +64,8 @@ export class MyService {}
 - `enabled` (boolean): Enable/disable auto-discovery
 - `priority` (number): Handler registration priority
 
+
+
 ### `@AutoEventHandler(options)`
 
 Marks a method as an event handler.
@@ -100,10 +104,10 @@ await this.eventPublisher.publish('user.created', userData, {
 ```
 
 **Methods:**
-- `publish(eventType, data, options?)` - Publish single event
-- `publishBatch(eventType, dataArray, options?)` - Publish batch of events
-- `publishEvent(event)` - Publish pre-built event
-- `getStats()` - Get publisher statistics
+- `publish(eventType: string, data: any, options?: PublishOptions): Promise<void>` - Publish single event
+- `publishBatch(eventType: string, dataArray: any[], options?: PublishOptions): Promise<void>` - Publish batch of events
+- `publishEvent(event: NestJSEvent<any>): Promise<void>` - Publish pre-built event
+- `getStats(): PublisherStats` - Get publisher statistics
 
 ### `EventConsumerService`
 
@@ -170,13 +174,86 @@ this.eventDiscoveryService.addServiceForAutoRegistration(service);
 
 // Get discovery statistics
 const stats = this.eventDiscoveryService.getDiscoveryStats();
+
+// Manually trigger registration
+await this.eventDiscoveryService.triggerRegistration();
 ```
 
 **Methods:**
-- `registerEventHandlers(instance)` - Register handlers for service
-- `addServiceForAutoRegistration(instance)` - Add service to discovery queue
-- `getDiscoveryStats()` - Get discovery statistics
-- `triggerRegistration()` - Manually trigger registration
+- `registerEventHandlers(instance: any): Promise<number>` - Register handlers, returns count
+- `addServiceForAutoRegistration(instance: any): void` - Add to discovery queue
+- `getDiscoveryStats(): { pending: number; registered: number; queueLength: number; retryCount: number }` - Get discovery statistics
+- `triggerRegistration(): Promise<void>` - Manually trigger registration
+
+### `EventMetadataExplorer`
+
+Explores instances for event handler metadata.
+
+```typescript
+constructor(private readonly metadataExplorer: EventMetadataExplorer) {}
+
+// Explore instance for handlers
+const handlers = this.metadataExplorer.explore(instance);
+
+// Check if instance has handlers
+const hasHandlers = this.metadataExplorer.hasEventHandlers(instance);
+
+// Get event types
+const eventTypes = this.metadataExplorer.getEventTypes(instance);
+
+// Cache statistics
+const cacheStats = this.metadataExplorer.getCacheStats();
+```
+
+**Methods:**
+- `explore(instance: any): EventHandlerMetadata[]` - Get handler metadata
+- `hasEventHandlers(instance: any): boolean` - Check if instance has handlers
+- `getEventTypes(instance: any): string[]` - Get event types
+- `getCacheStats(): CacheStats` - Get cache performance data
+- `invalidateCache(instance: any): void` - Invalidate instance cache
+- `clearCache(): void` - Clear all cache
+
+### `EventListenersController`
+
+Orchestrates registration of discovered handlers.
+
+```typescript
+constructor(private readonly listenersController: EventListenersController) {}
+
+// Register discovered handlers
+await this.listenersController.registerDiscoveredHandlers(instance);
+```
+
+**Methods:**
+- `registerDiscoveredHandlers(instance: any): Promise<void>` - Register all discovered handlers
+
+### `EventModuleScanner`
+
+Orchestrates global automatic discovery.
+
+```typescript
+constructor(private readonly moduleScanner: EventModuleScanner) {}
+
+// Scan for event handlers
+await this.moduleScanner.scanForEventHandlers();
+```
+
+**Methods:**
+- `scanForEventHandlers(): Promise<void>` - Scan and register all handlers
+
+### `AutoRegistrationTriggerService`
+
+Triggers automatic registration during module initialization.
+
+```typescript
+constructor(private readonly triggerService: AutoRegistrationTriggerService) {}
+
+// Trigger registration
+await this.triggerService.triggerRegistration();
+```
+
+**Methods:**
+- `triggerRegistration(): Promise<void>` - Trigger auto-registration process
 
 ### `EventHandlerRegistryService`
 
@@ -243,24 +320,30 @@ await this.simpleHandlerService.registerHandler('user.created', handler);
 - `registerHandler(eventType, handler)` - Register simple handler
 - `getHandlers(eventType)` - Get handlers for event type
 
+
+
 ## Types
 
 ### `NestJSEvent<T>`
 
-Event object passed to handlers.
+Event object passed to handlers. This extends the core `EventEnvelope<T>` from `@logistically/events`.
 
 ```typescript
-interface NestJSEvent<T> {
-  body: T;                    // Event payload
-  metadata: {                 // Event metadata
-    eventType: string;
-    timestamp: Date;
-    origin: string;
-    correlationId?: string;
-  };
-  headers?: Record<string, any>; // Custom headers
+interface NestJSEvent<T = any> extends EventEnvelope<T> {
+  nestjsMetadata?: NestJSEventMetadata;
+}
+
+interface NestJSEventMetadata {
+  correlationId?: string;
+  causationId?: string;
+  [key: string]: any;
 }
 ```
+
+The event object inherits all properties from `EventEnvelope<T>` which includes:
+- `body: T` - The event payload data
+- `header` - Event metadata (id, type, origin, timestamp, etc.)
+- `nestjsMetadata` - Optional NestJS-specific metadata
 
 ### `AutoEventHandlerOptions`
 
@@ -271,21 +354,225 @@ interface AutoEventHandlerOptions {
   eventType: string;          // Event type pattern
   priority?: number;          // Handler priority
   async?: boolean;            // Whether handler is async
-  retry?: any;                // Retry configuration
+  retry?: RetryOptions;       // Retry configuration
   [key: string]: any;         // Additional options
 }
 ```
 
-### `AutoRegisterEventsOptions`
+### `RetryOptions`
 
-Options for auto events decorator.
+Retry configuration for event handlers.
 
 ```typescript
-interface AutoRegisterEventsOptions {
-  enabled: boolean;           // Enable/disable auto-registration
-  priority?: number;          // Registration priority
+interface RetryOptions {
+  maxAttempts: number;        // Maximum retry attempts
+  backoffStrategy: 'fixed' | 'exponential'; // Backoff strategy
+  baseDelay: number;          // Base delay in milliseconds
+  maxDelay: number;           // Maximum delay in milliseconds
 }
 ```
+
+### `SubscriptionOptions`
+
+Options for event subscriptions.
+
+```typescript
+interface SubscriptionOptions {
+  groupId?: string;            // Consumer group ID
+  priority?: number;           // Handler priority
+  batchSize?: number;          // Batch size for processing
+  maxConcurrent?: number;      // Maximum concurrent handlers
+  timeout?: number;            // Handler timeout in milliseconds
+}
+```
+
+### `HandlerOptions`
+
+Options for event handler registration.
+
+```typescript
+interface HandlerOptions {
+  priority?: number;            // Handler priority
+  async?: boolean;              // Whether handler is async
+  retry?: RetryOptions;         // Retry configuration
+  timeout?: number;             // Handler timeout in milliseconds
+  metadata?: Record<string, any>; // Additional metadata
+}
+```
+
+### `EventHandler`
+
+Event handler function signature.
+
+```typescript
+type EventHandler<T = any> = (event: NestJSEvent<T>) => Promise<void> | void;
+```
+
+### `Transport`
+
+Event transport interface.
+
+```typescript
+interface Transport {
+  name: string;                 // Transport name
+  connect(): Promise<void>;     // Connect to transport
+  disconnect(): Promise<void>;  // Disconnect from transport
+  isConnected(): boolean;       // Check connection status
+  publish(topic: string, message: any): Promise<void>; // Publish message
+  subscribe(topic: string, handler: Function): Promise<void>; // Subscribe to topic
+  unsubscribe(topic: string, handler: Function): Promise<void>; // Unsubscribe from topic
+  close(): Promise<void>;       // Close transport
+  getStatus(): Promise<any>;    // Get transport status
+  getMetrics(): Promise<any>;   // Get transport metrics
+}
+```
+
+### `RoutingConfig`
+
+Event routing configuration.
+
+```typescript
+interface RoutingConfig {
+  routes: Route[];              // Route definitions
+  validationMode: 'strict' | 'warn' | 'ignore'; // Validation mode
+  topicMapping: Record<string, string>; // Topic mapping
+  defaultTopicStrategy: 'namespace' | 'flat' | 'custom'; // Default topic strategy
+}
+
+interface Route {
+  pattern: string;               // Event pattern (supports wildcards)
+  transport: string;             // Transport name
+  priority?: number;             // Route priority
+  options?: Record<string, any>; // Additional options
+}
+```
+
+### `PublisherConfig`
+
+Publisher configuration options.
+
+```typescript
+interface PublisherConfig {
+  batching?: {
+    enabled: boolean;            // Enable batching
+    maxSize: number;             // Maximum batch size
+    maxWaitMs: number;           // Maximum wait time
+    maxConcurrentBatches: number; // Maximum concurrent batches
+    strategy: 'size' | 'time' | 'hybrid'; // Batching strategy
+  };
+  retry?: {
+    enabled: boolean;            // Enable retries
+    maxAttempts: number;         // Maximum retry attempts
+    backoffStrategy: 'fixed' | 'exponential'; // Backoff strategy
+    baseDelay: number;           // Base delay in milliseconds
+    maxDelay: number;            // Maximum delay in milliseconds
+  };
+}
+```
+
+### `ConsumerConfig`
+
+Consumer configuration options.
+
+```typescript
+interface ConsumerConfig {
+  enablePatternRouting: boolean; // Enable pattern-based routing
+  enableConsumerGroups: boolean; // Enable consumer groups
+  validationMode: 'strict' | 'warn' | 'ignore'; // Validation mode
+  batchSize: number;             // Batch size for processing
+  maxConcurrentHandlers: number; // Maximum concurrent handlers
+  maxWaitMs: number;             // Maximum wait time for batches
+}
+```
+
+### `EventRouter`
+
+Event routing service.
+
+```typescript
+interface EventRouter {
+  resolveTopic(eventType: string): string; // Resolve event type to topic
+  resolveTransport(eventType: string): string; // Resolve event type to transport
+  getRoutes(): Route[]; // Get all configured routes
+  validateRoute(route: Route): boolean; // Validate route configuration
+}
+```
+
+### `EventHandlerRegistry`
+
+Event handler registry interface.
+
+```typescript
+interface EventHandlerRegistry {
+  registerHandler(eventType: string, handler: EventHandler, options?: HandlerOptions): Promise<void>;
+  unregisterHandler(eventType: string, handler: EventHandler): Promise<void>;
+  getHandlers(eventType: string): EventHandler[];
+  getAllHandlers(): Map<string, EventHandler[]>;
+  hasHandlers(eventType: string): boolean;
+  clearHandlers(eventType?: string): void;
+}
+```
+
+### `EventSystem`
+
+Core event system interface.
+
+```typescript
+interface EventSystem {
+  connect(): Promise<void>; // Connect to event system
+  disconnect(): Promise<void>; // Disconnect from event system
+  isConnected(): boolean; // Check connection status
+  getStatus(): Promise<SystemStatus>; // Get system status
+  getMetrics(): Promise<any>; // Get system metrics
+  close(): Promise<void>; // Close event system
+}
+```
+
+### `EventHandlerMetadata`
+
+Metadata for discovered event handlers.
+
+```typescript
+interface EventHandlerMetadata {
+  methodKey: string;         // Method name
+  eventType: string;         // Event type pattern
+  priority?: number;         // Handler priority
+  async?: boolean;           // Whether handler is async
+  instance: any;             // Service instance
+  metadata?: Record<string, any>; // Additional metadata
+}
+```
+
+### `EventDiscoveryOptions`
+
+Options for event discovery.
+
+```typescript
+interface EventDiscoveryOptions {
+  enabled: boolean;           // Enable discovery
+  priority: number;           // Discovery priority
+  autoRegister: boolean;      // Auto-register discovered handlers
+  scanInterval: number;       // Scan interval in milliseconds
+  maxRetries: number;         // Maximum retry attempts
+  retryDelay: number;         // Retry delay in milliseconds
+}
+```
+
+### `EventMetadataExplorerOptions`
+
+Options for metadata exploration.
+
+```typescript
+interface EventMetadataExplorerOptions {
+  cacheEnabled: boolean;      // Enable metadata caching
+  cacheTTL: number;           // Cache TTL in milliseconds
+  scanPrototypes: boolean;    // Scan prototype chain
+  includeInherited: boolean;  // Include inherited methods
+  filterMethods: (method: string) => boolean; // Method filter function
+}
+```
+
+
 
 ### `NestJSEventsModuleOptions`
 
@@ -295,7 +582,7 @@ Module configuration options.
 interface NestJSEventsModuleOptions {
   service: string;            // Service name
   originPrefix?: string;      // Origin prefix
-  autoDiscovery?: boolean;    // Enable auto-discovery
+  autoDiscovery?: boolean;    // Enable auto-discovery (required for performance monitoring)
   global?: boolean;           // Global module
   transports?: Map<string, any>; // Transport configuration
   routing?: any;              // Event routing
@@ -303,6 +590,107 @@ interface NestJSEventsModuleOptions {
   consumer?: any;             // Consumer configuration
   validationMode?: string;    // Validation mode
   debug?: boolean;            // Debug mode
+}
+```
+
+
+
+### `DiscoveryStats`
+
+Event discovery service statistics.
+
+```typescript
+interface DiscoveryStats {
+  pending: number;           // Services waiting for registration
+  registered: number;        // Successfully registered services
+  queueLength: number;       // Current queue length
+  retryCount: number;        // Total retry attempts
+}
+```
+
+### `EventHandlerMetadata`
+
+Metadata for discovered event handlers.
+
+```typescript
+interface EventHandlerMetadata {
+  methodKey: string;         // Method name
+  eventType: string;         // Event type pattern
+  priority?: number;         // Handler priority
+  async?: boolean;           // Whether handler is async
+  instance: any;             // Service instance
+}
+```
+
+### `CacheStats`
+
+Cache performance statistics.
+
+```typescript
+interface CacheStats {
+  hits: number;              // Cache hits
+  misses: number;            // Cache misses
+  hitRate: number;           // Hit rate percentage
+  size: number;              // Current cache size
+}
+```
+
+### `PublishOptions`
+
+Options for publishing events.
+
+```typescript
+interface PublishOptions {
+  headers?: Record<string, any>;  // Custom headers
+  partitionKey?: string;          // Partition key for ordering
+  correlationId?: string;         // Correlation ID for tracing
+  priority?: number;              // Event priority
+  ttl?: number;                   // Time to live in milliseconds
+}
+```
+
+### `PublisherStats`
+
+Publisher service statistics.
+
+```typescript
+interface PublisherStats {
+  eventsPublished: number;        // Total events published
+  batchesPublished: number;       // Total batches published
+  averageBatchSize: number;       // Average batch size
+  publishLatency: number;         // Average publish latency in ms
+  errorCount: number;             // Total publish errors
+  lastActivity: Date;             // Last publish activity
+}
+```
+
+### `ConsumerStats`
+
+Consumer service statistics.
+
+```typescript
+interface ConsumerStats {
+  eventsReceived: number;         // Total events received
+  handlersExecuted: number;       // Total handlers executed
+  averageProcessingTime: number;  // Average processing time in ms
+  errorCount: number;             // Total consumer errors
+  activeSubscriptions: number;    // Current active subscriptions
+  lastActivity: Date;             // Last consumer activity
+}
+```
+
+### `SystemStatus`
+
+Event system health status.
+
+```typescript
+interface SystemStatus {
+  connected: boolean;              // Connection status
+  healthy: boolean;                // System health
+  uptime: number;                  // System uptime in seconds
+  version: string;                 // System version
+  transports: string[];            // Available transports
+  lastActivity: Date;              // Last system activity
 }
 ```
 
@@ -481,10 +869,14 @@ const module = await Test.createTestingModule({
 
 ### Performance Issues
 
-1. Enable publisher batching
-2. Adjust batch sizes and timing
-3. Use appropriate transport for volume
-4. Monitor memory usage
+1. **Enable performance monitoring** by setting `autoDiscovery: true`
+2. **Check performance metrics** using `PerformanceMonitorService.getMetrics()`
+3. **Monitor cache hit rates** - low rates indicate inefficient metadata scanning
+4. **Enable batching** in publisher configuration for high-volume scenarios
+5. **Adjust batch sizes and timing** based on your throughput requirements
+6. **Use appropriate transport** for event volume and latency requirements
+7. **Monitor memory usage** and adjust cache TTL if needed
+8. **Review performance warnings** logged by the monitoring service
 
 For detailed troubleshooting and performance optimization, see [@logistically/events Troubleshooting](https://github.com/onwello/events/).
 
